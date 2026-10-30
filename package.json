@@ -22,7 +22,11 @@
     "scan:placeholders": "node scripts/scan-placeholders.mjs",
     "stress": "npx tsx scripts/run-stress.ts",
     "redteam": "npx tsx scripts/run-redteam.ts",
-    "scenario:a": "npx tsx scripts/run-scenario-a.ts"
+    "scenario:a": "npx tsx scripts/run-scenario-a.ts",
+    "demo:reset": "npx tsx scripts/reset.ts",
+    "demo:warm": "npx tsx scripts/demo-warm.ts",
+    "metrics": "npx tsx scripts/metrics.ts",
+    "acceptance": "vitest run apps/api/test/step16-acceptance.test.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

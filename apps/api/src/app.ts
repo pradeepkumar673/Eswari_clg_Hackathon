@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import { checkTransactionsSupported } from './db.js';
 import { authRouter } from './routes/auth.js';
@@ -37,6 +39,23 @@ import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
 initNotificationSubscribers();
 
 export const app = express();
+
+// ── Security hardening ───────────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // served via Vite in dev; SPA sets its own
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Rate-limit: 300 req / 15 min per IP (generous for demo multi-role switching)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/health', // never limit health checks
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' } },
+});
+app.use(limiter);
 
 app.use(cors());
 

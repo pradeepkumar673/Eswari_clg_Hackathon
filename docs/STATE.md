@@ -1,6 +1,6 @@
 # DisruptionIQ Verified Recovery Desk — Project State
 
-_Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
+_Last updated: 2026-10-30 by Step 17 (Hardening & Demo Readiness)_
 
 ---
 
@@ -25,7 +25,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 14 | Screens 5 and 6, notification drawer, Ask drawer, network map and add-on panels | **STEP 14: PASS** |
 | 15 | Screens 7 and 8, voice in the browser and operator phone view | **STEP 15: PASS** |
 | 16 | Full acceptance suite | **STEP 16: PASS** |
-| 17 | Hardening, full-repo review and demo readiness | NOT STARTED |
+| 17 | Hardening, full-repo review and demo readiness | **STEP 17: PASS** |
 | 18 | Final audit | NOT STARTED |
 
 ---
