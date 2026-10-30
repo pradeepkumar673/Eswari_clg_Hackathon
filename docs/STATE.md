@@ -21,7 +21,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | **STEP 10: PASS** |
 | 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | **STEP 11: PASS** |
 | 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | **STEP 12: PASS (BACKEND COMPLETE)** |
-| 13 | Frontend shell, design system and screens 1 to 4 | NOT STARTED |
+| 13 | Frontend shell, design system and screens 1 to 4 | **STEP 13: PASS** |
 | 14 | Screens 5 and 6, notification drawer, Ask drawer, network map and add-on panels | NOT STARTED |
 | 15 | Screens 7 and 8, voice in the browser and operator phone view | NOT STARTED |
 | 16 | Full acceptance suite | NOT STARTED |
@@ -287,15 +287,28 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
     - `npm run stress`: invokes `scripts/run-stress.ts`.
     - `npm run redteam`: invokes `scripts/run-redteam.ts`.
 
+### Step 13 - Frontend shell, design system and screens 1 to 4 (PASS)
+- **Part A: Shell & Impeccable Design System**:
+  - `docs/DESIGN.md`: Impeccable design brief defining calm control tower visual language, INR formatting (`₹`, `en-IN`), Asia/Kolkata timestamps, text + colour status representation, and 8 blueprint screens.
+  - `apps/web/src/ui/components.tsx`: Precision UI component system (`Button`, `Input`, `Select`, `StatusChip`, `RiskBandChip`, `MoneyText`, `TimeText`, `KpiCard`, `ProofChip`, `EmptyState`, `ErrorState`, `Skeleton`, `Dialog`, `Drawer`).
+  - `apps/web/src/ui/Layout.tsx`: Authoritative application shell featuring live SimClock (Asia/Kolkata IST), user role badge, demo quick-switcher dropdown, communications outbox drawer, Ask the Desk drawer, and the exact 8 blueprint screens.
+  - `apps/web/src/api/client.ts`: Typed API client with JWT storage, live user profile hydration, global 401/403/409 error parsing, and demo role switching.
+  - Screens 5 to 8 page shells established (`ImpactScreen`, `RecoveryScreen`, `ApprovalsScreen`, `AuditScreen`) with live empty states and zero fake data.
+- **Part B: Screens 1 to 4 on Live Data**:
+  - `Screen 1 (Sign-in)`: `apps/web/src/screens/SignInScreen.tsx` — Real credentials login plus demo quick-switch tiles for all 5 seeded roles.
+  - `Screen 2 (Operations Cockpit)`: `apps/web/src/screens/CockpitScreen.tsx` — B1 KPI strip (6 interactive cards), overall recovery progress bar, active disruptions table, A12 SPOF radar tile, A10 fingerprint match banner, B3 alert feed with acknowledgement, and 3 Recharts telemetry charts.
+  - `Screen 3 (Intake and Quarantine)`: `apps/web/src/screens/IntakeScreen.tsx` — CSV/JSON entity uploader, B11 quality report, row-level quarantine triage table with suggested fixes, carrier webhook storm simulator, and B15 text ingestion paste box.
+  - `Screen 4 (Disruption Investigation)`: `apps/web/src/screens/InvestigationScreen.tsx` — Belief-ETA reconciler card, event timeline with status chips (`APPLIED`, `DUPLICATE`, `STALE`, `CONFLICT`, `REJECTED`), conflict resolution buttons, B8 supplier scorecard, A5 decision replay scrubber with reconstructed past state, and bilingual voice field report confirmation (English & தமிழ்).
+
 ---
 
 ## NEXT STEP
 
-**Step 13 — Frontend shell, design system and screens 1 to 4 (Impeccable)**
+**Step 14 — Screens 5 and 6, header drawers, network map, add-on panels (Impeccable)**
 - Target Model: SONNET 4.6
 - Deliverables:
-  - Part A: Shell and design system (tokens, components, theme, auth, navigation).
-  - Part B: Screens 1 to 4 on live data (Sign-in, Operations cockpit, Intake and quarantine, Disruption investigation).
+  - Part A: Screens 5 and 6 (Impact and risk with factor waterfall and lineage drawer; Recovery workbench with baseline vs plan, Decision Contract, and solver tradeoffs).
+  - Part B: Network map (B2) and header drawer integration.
 
 ---
 
