@@ -20,9 +20,13 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, Polygon, Tooltip as LeafletTooltip } from 'react-leaflet';
+import { MapContainer, Polygon, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import '@geoman-io/leaflet-geoman-free';
+import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import { api, getStoredUser, getStoredToken } from '../api/client.js';
+import { resolveWarehouseCode } from '../utils/normalize.js';
+import { WarehouseSiteMap } from '../ui/WarehouseSiteMap.js';
 import {
   Button,
   Drawer,
@@ -60,11 +64,57 @@ export interface ZoneData {
   inbound_plans: Array<{ plan_id: string; shipment_id: string; slots: number; status: string }>;
 }
 
+const clamp1000 = (n: number) => Math.max(0, Math.min(1000, Math.round(n)));
+
+/** Adds the geoman toolbar (draw polygon/rectangle + edit vertices) to the Leaflet map. */
+function ZoneDrawControls({ onCreated }: { onCreated: (pts: [number, number][]) => void }) {
+  const map = useMap();
+  const cbRef = useRef(onCreated);
+  cbRef.current = onCreated;
+
+  useEffect(() => {
+    const pm = (map as any).pm;
+    if (!pm) return;
+    pm.addControls({
+      position: 'topleft',
+      drawPolygon: true,
+      drawRectangle: true,
+      editMode: true,
+      drawMarker: false,
+      drawCircleMarker: false,
+      drawPolyline: false,
+      drawCircle: false,
+      drawText: false,
+      dragMode: false,
+      cutPolygon: false,
+      removalMode: false,
+      rotateMode: false,
+    });
+    pm.setGlobalOptions({ allowSelfIntersection: false, snappable: true });
+
+    const handleCreate = (e: any) => {
+      const ring: L.LatLng[] = e.layer.getLatLngs()[0];
+      // Leaflet is [lat, lng] = [y, x]; the DB stores [x, y]
+      const pts = ring.map((ll) => [clamp1000(ll.lng), clamp1000(ll.lat)] as [number, number]);
+      map.removeLayer(e.layer); // real polygon is re-rendered from the API after save
+      cbRef.current(pts);
+    };
+
+    map.on('pm:create', handleCreate);
+    return () => {
+      map.off('pm:create', handleCreate);
+      pm.removeControls();
+    };
+  }, [map]);
+
+  return null;
+}
+
 export function WarehouseLayoutScreen() {
   const currentUser = getStoredUser();
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Administrator';
 
-  const [warehouseId, setWarehouseId] = useState<string>(currentUser?.warehouse_id || 'WH-HOS');
+  const [warehouseId, setWarehouseId] = useState<string>(resolveWarehouseCode(currentUser));
   const [zones, setZones] = useState<ZoneData[]>([]);
   const [overview, setOverview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -74,8 +124,8 @@ export function WarehouseLayoutScreen() {
   const [selectedZone, setSelectedZone] = useState<ZoneData | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Accessible View Toggle (Map vs List)
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+  // Accessible View Toggle (Site Map vs Zone Grid vs List)
+  const [viewMode, setViewMode] = useState<'site' | 'map' | 'list'>('site');
 
   // Quick Assign State
   const [assignSku, setAssignSku] = useState('SKU-101');
@@ -102,20 +152,27 @@ export function WarehouseLayoutScreen() {
   const [presenceUser, setPresenceUser] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // New-zone form (opens after the user finishes drawing a polygon)
+  const [pendingPolygon, setPendingPolygon] = useState<[number, number][] | null>(null);
+  const [newZone, setNewZone] = useState({ name: '', zone_type: 'STORAGE', capacity_slots: '50' });
+  const [newZoneSaving, setNewZoneSaving] = useState(false);
+
   const fetchCapacity = async () => {
     try {
       setLoading(true);
       setError(null);
       const [overviewData, zonesData] = await Promise.all([
         api.capacity.getOverview(warehouseId).catch(() => null),
-        api.capacity.getZones(warehouseId).catch(() => []),
+        api.capacity.getZones(warehouseId), // errors now reach the catch below
       ]);
 
       setOverview(overviewData);
-      setZones(zonesData || []);
+      setZones(Array.isArray(zonesData) ? zonesData : []);
 
       if (selectedZone) {
-        const refreshed = (zonesData || []).find((z: ZoneData) => z.zone_id === selectedZone.zone_id);
+        const refreshed = (Array.isArray(zonesData) ? zonesData : []).find(
+          (z: ZoneData) => z.zone_id === selectedZone.zone_id,
+        );
         if (refreshed) setSelectedZone(refreshed);
       }
     } catch (err: any) {
@@ -298,6 +355,41 @@ export function WarehouseLayoutScreen() {
     }
   };
 
+  const handleSaveNewZone = async () => {
+    if (!pendingPolygon) return;
+    try {
+      setNewZoneSaving(true);
+      await api.capacity.createZone({
+        zone_id: `ZN-${warehouseId.replace('WH-', '')}-${Date.now().toString().slice(-5)}`,
+        warehouse_id: warehouseId,
+        name: newZone.name.trim(),
+        zone_type: newZone.zone_type,
+        capacity_slots: parseInt(newZone.capacity_slots, 10) || 0,
+        polygon: pendingPolygon,
+      });
+      setPendingPolygon(null);
+      setNewZone({ name: '', zone_type: 'STORAGE', capacity_slots: '50' });
+      await fetchCapacity();
+    } catch (err: any) {
+      alert(`Could not create zone: ${err.message}`);
+    } finally {
+      setNewZoneSaving(false);
+    }
+  };
+
+  // Fired by geoman after a vertex of an existing zone is dragged
+  const handleZoneEdited = async (zoneId: string, layer: any) => {
+    try {
+      const ring: L.LatLng[] = layer.getLatLngs()[0];
+      const pts = ring.map((ll) => [clamp1000(ll.lng), clamp1000(ll.lat)] as [number, number]);
+      await api.capacity.patchZone(zoneId, { polygon: pts });
+      await fetchCapacity();
+    } catch (err: any) {
+      alert(`Could not save polygon: ${err.message}`);
+      await fetchCapacity(); // revert to the saved shape
+    }
+  };
+
   const getColourClass = (colour: string) => {
     switch (colour) {
       case 'RED':
@@ -388,6 +480,17 @@ export function WarehouseLayoutScreen() {
           {/* Map vs List View Toggle */}
           <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
             <button
+              onClick={() => setViewMode('site')}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded font-medium transition-all ${
+                viewMode === 'site'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              Site Map
+            </button>
+            <button
               onClick={() => setViewMode('map')}
               className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded font-medium transition-all ${
                 viewMode === 'map'
@@ -396,7 +499,7 @@ export function WarehouseLayoutScreen() {
               }`}
             >
               <MapIcon className="w-3.5 h-3.5" />
-              Map View
+              Zone Grid
             </button>
             <button
               onClick={() => setViewMode('list')}
@@ -493,7 +596,9 @@ export function WarehouseLayoutScreen() {
       )}
 
       {/* Main View Area: Leaflet Map or Accessible List */}
-      {loading ? (
+      {viewMode === 'site' ? (
+        <WarehouseSiteMap key={warehouseId} warehouseCode={warehouseId} canEdit={isManagerOrAdmin} />
+      ) : loading ? (
         <div className="p-8 bg-white rounded-xl border border-slate-200 shadow-sm text-center">
           <Skeleton className="h-96 w-full rounded-lg" />
         </div>
@@ -529,12 +634,16 @@ export function WarehouseLayoutScreen() {
             <MapContainer
               crs={L.CRS.Simple}
               bounds={[[0, 0], [1000, 1000]]}
-              maxBounds={[[ -100, -100 ], [ 1100, 1100 ]]}
-              zoom={0}
-              minZoom={-1}
+              maxBounds={[[-100, -100], [1100, 1100]]}
+              zoom={-1}
+              minZoom={-2}
               maxZoom={2}
+              zoomSnap={0.1}
+              zoomDelta={0.5}
               style={{ width: '100%', height: '100%', background: 'transparent' }}
             >
+              {isManagerOrAdmin && <ZoneDrawControls onCreated={setPendingPolygon} />}
+
               {/* Outer Warehouse Boundary (0,0 to 1000,1000) */}
               <Polygon
                 positions={[
@@ -548,11 +657,14 @@ export function WarehouseLayoutScreen() {
                   weight: 2,
                   dashArray: '8, 8',
                   fill: false,
-                }}
+                  pmIgnore: true,
+                } as any}
               />
 
               {/* Zones */}
-              {zones.map((zone) => {
+              {zones
+                .filter((z) => Array.isArray(z.polygon) && z.polygon.length >= 3)
+                .map((zone) => {
                 // DB polygon is [[x, y], ...]. In CRS.Simple, Leaflet maps [lat, lng] as [y, x]
                 const positions: [number, number][] = zone.polygon.map(([x, y]) => [y, x]);
                 const style = getPolygonStyle(zone.colour);
@@ -564,6 +676,7 @@ export function WarehouseLayoutScreen() {
                     pathOptions={style}
                     eventHandlers={{
                       click: () => handleOpenZone(zone),
+                      'pm:edit': (e: any) => handleZoneEdited(zone.zone_id, e.layer),
                     }}
                   >
                     <LeafletTooltip sticky direction="top" opacity={0.95}>
@@ -980,6 +1093,63 @@ export function WarehouseLayoutScreen() {
                 onClick={() => handleSavePolygon(editingZoneId)}
               >
                 {editSubmitting ? 'Validating & Saving...' : 'Save Boundary (PATCH)'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingPolygon && (
+        <div className="fixed inset-0 z-[2000] bg-slate-900/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+            <h3 className="font-bold text-slate-900">New zone in {warehouseId}</h3>
+            <p className="text-xs text-slate-500">{pendingPolygon.length} vertices drawn</p>
+
+            <label className="block text-xs font-semibold text-slate-700">
+              Zone name
+              <input
+                value={newZone.name}
+                onChange={(e) => setNewZone({ ...newZone, name: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm"
+                placeholder="e.g. Cold Storage B"
+              />
+            </label>
+
+            <label className="block text-xs font-semibold text-slate-700">
+              Type
+              <select
+                value={newZone.zone_type}
+                onChange={(e) => setNewZone({ ...newZone, zone_type: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm"
+              >
+                {['RECEIVING', 'STORAGE', 'DISPATCH', 'QUARANTINE'].map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-xs font-semibold text-slate-700">
+              Capacity (slots)
+              <input
+                type="number"
+                min={1}
+                value={newZone.capacity_slots}
+                onChange={(e) => setNewZone({ ...newZone, capacity_slots: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded px-2 py-1.5 text-sm"
+              />
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setPendingPolygon(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveNewZone}
+                loading={newZoneSaving}
+                disabled={!newZone.name.trim()}
+              >
+                Save zone
               </Button>
             </div>
           </div>

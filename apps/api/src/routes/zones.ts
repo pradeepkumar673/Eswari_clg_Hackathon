@@ -24,7 +24,131 @@ import {
   syncZoneOverCapacityAlert,
 } from '../services/capacityService.js';
 
+async function resolveWarehouseCode(raw?: any): Promise<string | undefined> {
+  if (!raw) return undefined;
+  const str = String(raw);
+  if (mongoose.Types.ObjectId.isValid(str)) {
+    const wh = await Warehouse.findById(str).lean();
+    if (wh?.code) return wh.code;
+  }
+  return str;
+}
+
 export const zonesRouter = Router();
+
+// ── Warehouse site footprints (real-world [lat, lng] polygons) ───────────────
+function validateFootprint(points: any): { valid: boolean; error?: string } {
+  if (!Array.isArray(points) || points.length < 3) {
+    return { valid: false, error: 'Footprint needs at least 3 corner points' };
+  }
+  if (points.length > 200) {
+    return { valid: false, error: 'Footprint cannot have more than 200 points' };
+  }
+  for (const p of points) {
+    if (!Array.isArray(p) || p.length !== 2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) {
+      return { valid: false, error: 'Each point must be [lat, lng]' };
+    }
+    if (p[0] < -90 || p[0] > 90 || p[1] < -180 || p[1] > 180) {
+      return { valid: false, error: `Point [${p[0]}, ${p[1]}] is not a valid lat/lng` };
+    }
+  }
+  return { valid: true };
+}
+
+// GET /capacity/footprints
+zonesRouter.get(
+  '/footprints',
+  authenticateToken,
+  requirePermission('capacity.view'),
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const whs = await Warehouse.find({ is_active: { $ne: false } }).lean();
+      res.json({
+        warehouses: whs.map((w: any) => ({
+          code: w.code,
+          name: w.name,
+          lat: w.lat ?? null,
+          lng: w.lng ?? null,
+          footprint: w.footprint ?? null,
+          footprint_updated_at: w.footprint_updated_at ?? null,
+        })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// PUT /capacity/footprint/:code  { polygon: [[lat,lng], ...] }
+zonesRouter.put(
+  '/footprint/:code',
+  authenticateToken,
+  requirePermission('zone.edit'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const code = req.params.code;
+      const polygon = req.body?.polygon;
+      const check = validateFootprint(polygon);
+      if (!check.valid) {
+        res.status(400).json({ error: 'Bad Request', message: check.error });
+        return;
+      }
+
+      const before: any = await Warehouse.findOne({ code }).lean();
+      if (!before) {
+        res.status(404).json({ error: 'Not Found', message: `Warehouse ${code} not found` });
+        return;
+      }
+
+      await Warehouse.updateOne(
+        { code },
+        { $set: { footprint: polygon, footprint_updated_at: new Date() } },
+      );
+
+      try {
+        await writeAudit({
+          action: 'WAREHOUSE_FOOTPRINT_SET',
+          actor: (req.user as any)?._id || (req.user as any)?.id || (req.user as any)?.sub,
+          entityType: 'Warehouse',
+          entityId: code,
+          before: { footprint: before.footprint ?? null },
+          after: { footprint: polygon },
+        } as any);
+      } catch {
+        // audit failure must not block the save
+      }
+
+      await broadcastToTopic('zones', { type: 'WAREHOUSE_FOOTPRINT_UPDATED', warehouse_id: code });
+      res.json({ ok: true, code, footprint: polygon });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// DELETE /capacity/footprint/:code
+zonesRouter.delete(
+  '/footprint/:code',
+  authenticateToken,
+  requirePermission('zone.edit'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const code = req.params.code;
+      const r = await Warehouse.updateOne(
+        { code },
+        { $set: { footprint: null, footprint_updated_at: new Date() } },
+      );
+      if (r.matchedCount === 0) {
+        res.status(404).json({ error: 'Not Found', message: `Warehouse ${code} not found` });
+        return;
+      }
+      await broadcastToTopic('zones', { type: 'WAREHOUSE_FOOTPRINT_UPDATED', warehouse_id: code });
+      res.json({ ok: true, code, footprint: null });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
 
 // ── 1. GET /zones ────────────────────────────────────────────────────────────
 zonesRouter.get(
@@ -34,7 +158,9 @@ zonesRouter.get(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const filter: Record<string, any> = { is_active: { $ne: false } };
-      if (req.query.warehouse_id) filter.warehouse_id = req.query.warehouse_id;
+      if (req.query.warehouse_id) {
+        filter.warehouse_id = await resolveWarehouseCode(req.query.warehouse_id);
+      }
 
       const rawZones = await Zone.find(filter).lean();
       const detailedZones = await Promise.all(
@@ -61,7 +187,8 @@ zonesRouter.get(
   requirePermission('capacity.view'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const warehouseId = (req.query.warehouse_id as string) || 'WH-HOS';
+      const rawWhId = (req.query.warehouse_id as string) || 'WH-HOS';
+      const warehouseId = (await resolveWarehouseCode(rawWhId)) || 'WH-HOS';
       const zones = await Zone.find({
         warehouse_id: warehouseId,
         is_active: { $ne: false },
@@ -317,6 +444,7 @@ zonesRouter.delete(
 zonesRouter.post(
   '/:id/assignments',
   authenticateToken,
+  requirePermission('zone.edit'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -465,6 +593,7 @@ zonesRouter.post(
 zonesRouter.post(
   '/inbound-plans',
   authenticateToken,
+  requirePermission('capacity.view'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -633,6 +762,7 @@ zonesRouter.post(
 zonesRouter.delete(
   '/inbound-plans/:id',
   authenticateToken,
+  requirePermission('capacity.view'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -688,7 +818,8 @@ zonesRouter.get(
   requirePermission('capacity.view'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const warehouseId = (req.query.warehouse_id as string) || 'WH-HOS';
+      const rawWhId = (req.query.warehouse_id as string) || 'WH-HOS';
+      const warehouseId = (await resolveWarehouseCode(rawWhId)) || 'WH-HOS';
       const zones = await Zone.find({
         warehouse_id: warehouseId,
         is_active: { $ne: false },

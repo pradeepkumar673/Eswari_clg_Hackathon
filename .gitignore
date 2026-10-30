@@ -50,3 +50,7 @@ tmp/
 # TypeScript
 *.tsbuildinfo
 
+
+# Aider Studio (auto-added)
+REPO_MAP.md
+.aider/

@@ -544,6 +544,12 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
     { username: 'drv1', display_name: 'Driver 1 (Ramesh)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-1', truck_id: 'SHP-204', supplier_id: null },
     { username: 'drv2', display_name: 'Driver 2 (Karthik)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-2', truck_id: 'SHP-310', supplier_id: null },
     { username: 'sup1', display_name: 'Supplier Rep 1 (Apex)', role: 'SUPPLIER' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: 'SUP-1' },
+    // UI / README aliases (same identities, documented demo usernames)
+    { username: 'analyst1', display_name: 'Priya Analyst', role: 'Analyst' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'manager1', display_name: 'Rajan Manager', role: 'Manager' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'operator_blr', display_name: 'Karthik Operator BLR', role: 'Warehouse_Operator' as const, warehouse_id: wh['WH-BLR'], driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'procurement1', display_name: 'Meena Procurement', role: 'Procurement_Approver' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'admin1', display_name: 'Admin User', role: 'Administrator' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
   ];
 
   const validUsernames = userSeeds.map((u) => u.username);
@@ -561,7 +567,7 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
       display_name: u.display_name,
     });
   }
-  console.log('[seed] Users: 10 users (including 2 DRIVER and 1 SUPPLIER)');
+  console.log('[seed] Users: 15 users (including demo aliases, 2 DRIVER and 1 SUPPLIER)');
 
   // ── 11. SourceTrust ───────────────────────────────────────────────────────
   const validSources = ['FIELD_REPORT', 'CARRIER_API', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT'];
@@ -804,7 +810,7 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
   ]);
   console.log('[seed] DamagePolicies: MINOR (0h), MAJOR (24h), SEVERE (48h)');
 
-  // ── 18. Step 19: Zones for WH-HOS ──────────────────────────────────────────
+  // ── 18. Step 19: Zones for WH-HOS & WH-CHN ──────────────────────────────────
   await upsertMany(Zone, [
     {
       filter: { zone_id: 'ZN-HOS-REC' },
@@ -860,8 +866,44 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
         version: 1,
       },
     },
+    {
+      filter: { zone_id: 'ZN-CHN-REC' },
+      data: {
+        zone_id: 'ZN-CHN-REC',
+        warehouse_id: 'WH-CHN',
+        name: 'Chennai Inbound Bay 1',
+        zone_type: 'RECEIVING',
+        polygon: [
+          [100, 100],
+          [300, 100],
+          [300, 300],
+          [100, 300],
+        ],
+        capacity_slots: 30,
+        reserved_inbound_slots: 0,
+        version: 1,
+      },
+    },
+    {
+      filter: { zone_id: 'ZN-CHN-STR' },
+      data: {
+        zone_id: 'ZN-CHN-STR',
+        warehouse_id: 'WH-CHN',
+        name: 'Chennai High-Bay Racks',
+        zone_type: 'STORAGE',
+        polygon: [
+          [350, 100],
+          [750, 100],
+          [750, 500],
+          [350, 500],
+        ],
+        capacity_slots: 100,
+        reserved_inbound_slots: 0,
+        version: 1,
+      },
+    },
   ]);
-  console.log('[seed] Zones: 3 zones for WH-HOS (RECEIVING 50, STORAGE 120, DISPATCH 40)');
+  console.log('[seed] Zones: 3 zones for WH-HOS, 2 zones for WH-CHN');
 
   // ── Done ──────────────────────────────────────────────────────────────────
   if (disconnectAfter) {

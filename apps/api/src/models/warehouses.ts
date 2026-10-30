@@ -7,6 +7,8 @@ export interface IWarehouse extends Document {
   map_y: number;
   lat?: number;
   lng?: number;
+  footprint?: Array<[number, number]> | null;
+  footprint_updated_at?: Date | null;
   processing_hours: number;
   is_hub: boolean;
   is_active: boolean;
@@ -20,6 +22,8 @@ const warehouseSchema = new Schema<IWarehouse>({
   map_y: { type: Number, required: true, min: 0, max: 1000 },
   lat: { type: Number, default: null },
   lng: { type: Number, default: null },
+  footprint: { type: Schema.Types.Mixed, default: null },
+  footprint_updated_at: { type: Date, default: null },
   processing_hours: { type: Number, required: true, default: 2 },
   is_hub: { type: Boolean, required: true, default: false },
   is_active: { type: Boolean, default: true },

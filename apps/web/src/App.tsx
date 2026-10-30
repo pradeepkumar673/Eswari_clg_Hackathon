@@ -7,7 +7,7 @@
  * - QueryClientProvider for live caching
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { UserProfile, getStoredUser, setStoredUser, api } from './api/client.js';
@@ -25,6 +25,18 @@ import { DriverScreen } from './screens/DriverScreen.js';
 import { WarehouseLayoutScreen } from './screens/WarehouseLayoutScreen.js';
 import { ClaimsScreen } from './screens/ClaimsScreen.js';
 import { RoleHomeScreen } from './screens/RoleHomeScreen.js';
+
+function RequireRole({
+  user,
+  roles,
+  children,
+}: {
+  user: UserProfile;
+  roles: string[];
+  children: React.ReactElement;
+}) {
+  return roles.includes('*') || roles.includes(user.role) ? children : <Navigate to="/" replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,25 +79,89 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Layout user={user} onUserChange={refreshUser}>
+        {!user ? (
+          /* LOGGED OUT: only the sign-in page, no sidebar, no header */
           <Routes>
             <Route path="/login" element={<SignInScreen onLoginSuccess={refreshUser} />} />
-            <Route path="/" element={<RoleHomeScreen />} />
-            <Route path="/cockpit" element={<CockpitScreen />} />
-            <Route path="/intake" element={<IntakeScreen />} />
-            <Route path="/investigation" element={<InvestigationScreen />} />
-            <Route path="/impact" element={<ImpactScreen />} />
-            <Route path="/recovery" element={<RecoveryScreen />} />
-            <Route path="/approvals" element={<ApprovalsScreen />} />
-            <Route path="/audit" element={<AuditScreen />} />
-            <Route path="/tracking" element={<TrackingScreen />} />
-            <Route path="/driver" element={<DriverScreen />} />
-            <Route path="/capacity" element={<WarehouseLayoutScreen />} />
-            <Route path="/claims" element={<ClaimsScreen />} />
-            {/* Catch-all redirect to Cockpit */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
-        </Layout>
+        ) : (
+          /* LOGGED IN: full app shell */
+          <Layout user={user} onUserChange={refreshUser}>
+            <Routes>
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              <Route path="/" element={<RoleHomeScreen />} />
+              <Route path="/cockpit" element={<CockpitScreen />} />
+              <Route
+                path="/intake"
+                element={
+                  <RequireRole user={user} roles={['Analyst', 'Administrator']}>
+                    <IntakeScreen />
+                  </RequireRole>
+                }
+              />
+              <Route path="/investigation" element={<InvestigationScreen />} />
+              <Route
+                path="/impact"
+                element={
+                  <RequireRole user={user} roles={['Analyst', 'Manager', 'Administrator']}>
+                    <ImpactScreen />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/recovery"
+                element={
+                  <RequireRole user={user} roles={['Analyst', 'Manager']}>
+                    <RecoveryScreen />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/approvals"
+                element={
+                  <RequireRole user={user} roles={['Manager', 'Procurement_Approver']}>
+                    <ApprovalsScreen />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/audit"
+                element={
+                  <RequireRole user={user} roles={['Administrator', 'Manager', 'Analyst', 'Procurement_Approver']}>
+                    <AuditScreen />
+                  </RequireRole>
+                }
+              />
+              <Route path="/tracking" element={<TrackingScreen />} />
+              <Route
+                path="/driver"
+                element={
+                  <RequireRole user={user} roles={['DRIVER', 'Administrator', 'Manager']}>
+                    <DriverScreen />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/capacity"
+                element={
+                  <RequireRole user={user} roles={['Warehouse_Operator', 'Manager', 'Administrator', 'Analyst']}>
+                    <WarehouseLayoutScreen />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/claims"
+                element={
+                  <RequireRole user={user} roles={['Procurement_Approver', 'SUPPLIER', 'Administrator', 'Manager', 'Analyst']}>
+                    <ClaimsScreen />
+                  </RequireRole>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
+        )}
       </BrowserRouter>
     </QueryClientProvider>
   );

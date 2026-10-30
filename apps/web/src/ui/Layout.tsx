@@ -35,7 +35,6 @@ import {
   Zap,
   CheckCircle,
   FileCheck,
-  Lock,
   Bell,
   MessageSquare,
   Clock,
@@ -51,7 +50,6 @@ import {
 } from 'lucide-react';
 
 const SCREENS = [
-  { path: '/login', name: '1. Sign-in', icon: Lock, allowedRoles: ['*'] },
   { path: '/', name: '2. Operations Cockpit', icon: LayoutDashboard, allowedRoles: ['*'] },
   { path: '/intake', name: '3. Intake & Quarantine', icon: UploadCloud, allowedRoles: ['Analyst', 'Administrator'] },
   { path: '/investigation', name: '4. Disruption Investigation', icon: Search, allowedRoles: ['*'] },
@@ -94,6 +92,10 @@ export function Layout({
   const navigate = useNavigate();
   const location = useLocation();
 
+  const visibleScreens = SCREENS.filter(
+    (s) => s.allowedRoles.includes('*') || (user && s.allowedRoles.includes(user.role)),
+  );
+
   // Drawers
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
   const [askDrawerOpen, setAskDrawerOpen] = useState(false);
@@ -122,14 +124,17 @@ export function Layout({
 
   // Notifications live load
   useEffect(() => {
+    if (!user) return; // don't poll while logged out
     let mounted = true;
     const loadNotifs = async () => {
       try {
-        const notifRes = await api.notifications.getNotifications();
-        if (mounted && Array.isArray(notifRes)) setNotifications(notifRes);
+        const notifRes: any = await api.notifications.getNotifications();
+        const list = Array.isArray(notifRes) ? notifRes : notifRes?.notifications ?? [];
+        if (mounted) setNotifications(list);
 
-        const outboxRes = await api.notifications.getOutbox();
-        if (mounted && Array.isArray(outboxRes)) setOutbox(outboxRes);
+        const outboxRes: any = await api.notifications.getOutbox();
+        const ob = Array.isArray(outboxRes) ? outboxRes : outboxRes?.outbox ?? [];
+        if (mounted) setOutbox(ob);
       } catch {
         // quiet fallback
       }
@@ -140,7 +145,7 @@ export function Layout({
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [user?.id]);
 
   const handleDemoRoleSwitch = async (roleObj: typeof DEMO_ROLES[0]) => {
     setRoleSwitching(true);
@@ -290,7 +295,7 @@ export function Layout({
           </div>
 
           <nav className="space-y-1 px-2 flex-1">
-            {SCREENS.map((s) => {
+            {visibleScreens.map((s, i) => {
               const Icon = s.icon;
               const isActive = location.pathname === s.path;
               return (
@@ -304,7 +309,7 @@ export function Layout({
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{s.name}</span>
+                  <span className="truncate">{i + 1}. {s.name.replace(/^\d+\.\s*/, '')}</span>
                 </NavLink>
               );
             })}

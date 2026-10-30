@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -k -p \"[{name}]\" -n \"api,web,solver\" -c \"blue,green,magenta\" \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:solver\"",
+    "dev": "concurrently -p \"[{name}]\" -n \"api,web,solver\" -c \"blue,green,magenta\" \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:solver\"",
     "dev:api": "npm --workspace=apps/api run dev",
     "dev:web": "npm --workspace=apps/web run dev",
     "dev:solver": "python -m uvicorn main:app --app-dir services/solver --reload --port 8000",

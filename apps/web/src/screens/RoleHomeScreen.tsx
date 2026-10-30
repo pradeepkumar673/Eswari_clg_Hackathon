@@ -19,6 +19,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getStoredUser } from '../api/client.js';
+import { pickArray, resolveWarehouseCode } from '../utils/normalize.js';
 import { Button } from '../ui/components.js';
 import {
   Navigation,
@@ -38,6 +39,7 @@ export function RoleHomeScreen() {
   const navigate = useNavigate();
   const currentUser = getStoredUser();
   const role = currentUser?.role || 'Analyst';
+  const whCode = resolveWarehouseCode(currentUser);
 
   // State for Manager Home View
   const [approvals, setApprovals] = useState<any[]>([]);
@@ -61,36 +63,35 @@ export function RoleHomeScreen() {
       Promise.all([
         api.approvals.getQueue().catch(() => []),
         api.tracking.getReroutes('PENDING').catch(() => []),
-        api.capacity.getOverview(currentUser?.warehouse_id || 'WH-HOS').catch(() => null),
-      ])
-        .then(([appr, rts, cap]) => {
-          setApprovals(appr || []);
-          setReroutes(rts || []);
-          setCapacityOverview(cap);
-        });
+        api.capacity.getOverview(whCode).catch(() => null),
+      ]).then(([appr, rts, cap]) => {
+        setApprovals(pickArray(appr, 'queue'));
+        setReroutes(pickArray(rts, 'proposals'));
+        setCapacityOverview(cap);
+      });
     } else if (role === 'Analyst') {
       Promise.all([
         api.cctv.getHotspots().catch(() => []),
         api.tracking.getTrucks().catch(() => []),
       ]).then(([hs, trks]) => {
-        setHotspots(hs || []);
-        setFleetTrucks(trks || []);
+        setHotspots(pickArray(hs, 'hotspots'));
+        setFleetTrucks(pickArray(trks, 'trucks'));
       });
     } else if (role === 'Warehouse_Operator') {
-      const whId = currentUser?.warehouse_id || 'WH-HOS';
-      api.cctv.getEvents(whId).then((evts) => {
-        setCctvEvents(evts || []);
-      }).catch(() => {});
+      api.cctv
+        .getEvents(whCode)
+        .then((evts) => setCctvEvents(pickArray(evts, 'events')))
+        .catch(() => {});
     } else if (role === 'Procurement_Approver') {
       Promise.all([
         api.claims.getClaims().catch(() => []),
         api.audit.getScorecards().catch(() => []),
       ]).then(([clms, scs]) => {
-        setProcClaims(clms || []);
-        setScorecards(scs || []);
+        setProcClaims(pickArray(clms, 'claims'));
+        setScorecards(pickArray(scs, 'scorecards'));
       });
     }
-  }, [role, currentUser?.warehouse_id]);
+  }, [role, whCode]);
 
   // Handler for Manager Reroute Approval
   const handleDecideReroute = async (proposalId: string, approve: boolean) => {
@@ -101,7 +102,7 @@ export function RoleHomeScreen() {
         await api.tracking.rejectReroute(proposalId, 'Rejected by Supply Chain Manager');
       }
       const updated = await api.tracking.getReroutes('PENDING');
-      setReroutes(updated || []);
+      setReroutes(pickArray(updated, 'proposals'));
     } catch (err: any) {
       alert(`Decision failed: ${err.message}`);
     }
@@ -112,9 +113,8 @@ export function RoleHomeScreen() {
     try {
       setOperatorConfirming(eventId);
       await api.cctv.linkEvent(eventId, shipmentId || 'SHP-HOS-001');
-      const whId = currentUser?.warehouse_id || 'WH-HOS';
-      const evts = await api.cctv.getEvents(whId);
-      setCctvEvents(evts || []);
+      const evts = await api.cctv.getEvents(whCode);
+      setCctvEvents(pickArray(evts, 'events'));
     } catch (err: any) {
       alert(`Failed to confirm event: ${err.message}`);
     } finally {
@@ -326,7 +326,7 @@ export function RoleHomeScreen() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs uppercase tracking-wider text-indigo-200 font-bold">Floor Operations Console</div>
-              <h1 className="text-2xl font-black mt-0.5">{currentUser?.warehouse_id || 'WH-HOS'} Depot</h1>
+              <h1 className="text-2xl font-black mt-0.5">{whCode} Depot</h1>
             </div>
             <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-bold">
               OPERATOR ACTIVE
@@ -377,7 +377,7 @@ export function RoleHomeScreen() {
 
           {cctvEvents.length === 0 ? (
             <div className="text-center py-8 text-xs text-slate-400">
-              No unconfirmed CCTV damage events detected at {currentUser?.warehouse_id || 'this warehouse'}.
+              No unconfirmed CCTV damage events detected at {whCode}.
             </div>
           ) : (
             <div className="space-y-3">

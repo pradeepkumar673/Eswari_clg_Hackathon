@@ -20,7 +20,7 @@ const DEMO_USERS = [
 
 export function SignInScreen({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [username, setUsername] = useState('analyst1');
-  const [password, setPassword] = useState('demo1234');
+  const [password, setPassword] = useState('demo_recovery_2026');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();

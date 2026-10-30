@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { pickArray } from '../utils/normalize.js';
 import {
   KpiCard,
   StatusChip,
@@ -83,12 +84,12 @@ export function CockpitScreen() {
 
       setKpis(kpiRes);
       setOverview(overviewRes);
-      setAlerts(alertRes || []);
-      setSpof(spofRes?.ranked_nodes || []);
-      setFingerprints(fpRes?.fingerprints || []);
-      setChartPenalty(penRes?.data || []);
-      setChartDisruptions(disRes?.data || []);
-      setChartQuality(qualRes?.data || []);
+      setAlerts(pickArray(alertRes, 'alerts'));
+      setSpof(pickArray(spofRes, 'spof_radar', 'ranked_nodes'));
+      setFingerprints(pickArray(fpRes, 'fingerprints'));
+      setChartPenalty(pickArray(penRes, 'chart', 'data'));
+      setChartDisruptions(pickArray(disRes, 'chart', 'data'));
+      setChartQuality(pickArray(qualRes, 'chart', 'data'));
     } catch (e: any) {
       setError(e.message || 'Failed to load cockpit telemetry');
     } finally {

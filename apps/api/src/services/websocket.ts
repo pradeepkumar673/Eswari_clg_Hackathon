@@ -136,10 +136,10 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
           state.userId = userDoc._id.toString();
           state.username = userDoc.username;
           state.role = userDoc.role;
-          state.warehouse_id = userDoc.warehouse_id ? userDoc.warehouse_id.toString() : null;
-          state.driver_id = userDoc.driver_id || null;
-          state.truck_id = userDoc.truck_id || null;
-          state.supplier_id = userDoc.supplier_id || null;
+          state.warehouse_id = (payload as any).warehouse_id || (userDoc.warehouse_id ? userDoc.warehouse_id.toString() : null);
+          state.driver_id = (payload as any).driver_id || userDoc.driver_id || null;
+          state.truck_id = (payload as any).truck_id || userDoc.truck_id || null;
+          state.supplier_id = (payload as any).supplier_id || userDoc.supplier_id || null;
 
           ws.send(
             JSON.stringify({
@@ -173,10 +173,12 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
         const liveUser = await User.findById(state.userId).lean();
         if (liveUser) {
           state.role = liveUser.role;
-          state.warehouse_id = liveUser.warehouse_id ? liveUser.warehouse_id.toString() : null;
-          state.driver_id = liveUser.driver_id || null;
-          state.truck_id = liveUser.truck_id || null;
-          state.supplier_id = liveUser.supplier_id || null;
+          if (!state.warehouse_id) {
+            state.warehouse_id = liveUser.warehouse_id ? liveUser.warehouse_id.toString() : null;
+          }
+          if (!state.driver_id) state.driver_id = liveUser.driver_id || null;
+          if (!state.truck_id) state.truck_id = liveUser.truck_id || null;
+          if (!state.supplier_id) state.supplier_id = liveUser.supplier_id || null;
         }
 
         const requiredCaps = TOPIC_PERMISSIONS[topic];
@@ -281,7 +283,9 @@ export async function broadcastToTopic(
           const userWhDoc = await Warehouse.findById(client.warehouse_id).lean();
           const matchesWh = (item: any) =>
             item.warehouse_id === client.warehouse_id ||
-            (userWhDoc && item.warehouse_id === userWhDoc.code);
+            item.destination_warehouse === client.warehouse_id ||
+            item.destination_warehouse_id === client.warehouse_id ||
+            (userWhDoc && (item.warehouse_id === userWhDoc.code || item.destination_warehouse === userWhDoc.code || item.destination_warehouse_id === userWhDoc.code));
 
           if (Array.isArray(payload)) {
             const match = payload.filter(matchesWh);

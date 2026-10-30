@@ -18,7 +18,7 @@ async function main() {
   let admin = await User.findOne({ role: 'Administrator' });
   const adminId = admin ? admin._id : new mongoose.Types.ObjectId();
 
-  console.log('[redteam] Executing 15 adversarial bypass attempts...');
+  console.log('[redteam] Executing adversarial bypass attempts across all security perimeters...');
   const result = await runRedTeamSuite(adminId);
 
   console.log('\n--- RED TEAM ADVERSARIAL REPORT ---');

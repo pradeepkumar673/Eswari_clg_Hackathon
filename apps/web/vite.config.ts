@@ -8,7 +8,16 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:4000',
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.error('[vite-proxy] API unreachable:', (err as any).code, err.message);
+          });
+        }
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:4000',
+        ws: true
       }
     }
   }

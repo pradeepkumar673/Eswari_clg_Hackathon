@@ -1,9 +1,18 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'path';
 
-// Load .env
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+const envCandidates = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), '../../.env'),
+];
+for (const envPath of envCandidates) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 const ConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -16,7 +25,11 @@ const ConfigSchema = z.object({
   SOLVER_URL: z.string().url().default('http://127.0.0.1:8000'),
   GROQ_API_KEY: z.string().optional(),
   SIM_NOW: z.string().optional(),
-  DEMO_MODE: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(true)),
+  DEMO_MODE: z.preprocess((val) => {
+    if (val === undefined || val === '') return true;
+    if (typeof val === 'boolean') return val;
+    return String(val).toLowerCase() === 'true';
+  }, z.boolean()),
   DEMO_PASSWORD: z.string().default('demo_recovery_2026'),
   // Step 19 Config
   MAP_TILE_URL: z.string().default(''),

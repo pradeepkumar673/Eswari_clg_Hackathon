@@ -26,7 +26,9 @@ import {
 } from 'lucide-react';
 import { getStoredToken } from '../api/client.js';
 
-const MAP_TILE_URL = (import.meta as any).env?.VITE_MAP_TILE_URL || '';
+const MAP_TILE_URL =
+  (import.meta as any).env?.VITE_MAP_TILE_URL ||
+  'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export interface TruckTelemetry {
   truck_id: string;

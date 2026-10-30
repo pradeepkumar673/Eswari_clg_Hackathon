@@ -101,6 +101,7 @@ trackingRouter.get(
 trackingRouter.get(
   '/tracking/trucks',
   authenticateToken,
+  requireAnyPermission(['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user!;
@@ -211,6 +212,7 @@ trackingRouter.get(
 trackingRouter.get(
   '/tracking/trucks/:id/route',
   authenticateToken,
+  requireAnyPermission(['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const truckId = req.params.id;
@@ -415,6 +417,7 @@ trackingRouter.post(
 trackingRouter.get(
   '/reroutes',
   authenticateToken,
+  requireAnyPermission(['reroute.decide', 'tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const filter: any = {};
@@ -587,6 +590,7 @@ trackingRouter.post(
 trackingRouter.get(
   '/tracking/nearest',
   authenticateToken,
+  requireAnyPermission(['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own', 'reroute.decide']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const truckId = req.query.truck_id as string;
@@ -617,6 +621,7 @@ trackingRouter.get(
 trackingRouter.post(
   '/admin/sim/tick',
   authenticateToken,
+  requirePermission('run_stress_test'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user!;

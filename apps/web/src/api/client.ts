@@ -259,9 +259,13 @@ export const api = {
   // Notifications
   notifications: {
     getNotifications: () =>
-      apiRequest<any[]>('/notifications'),
+      apiRequest<{ notifications?: any[]; unread_count?: number } | any[]>('/notifications').then(
+        (data) => (Array.isArray(data) ? data : data?.notifications ?? []),
+      ),
     getOutbox: (channel?: string) =>
-      apiRequest<any[]>(`/notifications/outbox${channel ? `?channel=${channel}` : ''}`),
+      apiRequest<{ outbox?: any[] } | any[]>(`/notifications/outbox${channel ? `?channel=${channel}` : ''}`).then(
+        (data) => (Array.isArray(data) ? data : data?.outbox ?? []),
+      ),
     markRead: (id: string) =>
       apiRequest<any>(`/notifications/${id}/read`, { method: 'PATCH' }),
   },
@@ -335,6 +339,11 @@ export const api = {
 
   // Capacity Mapper & Inbound Plans
   capacity: {
+    getFootprints: () => apiRequest<any>('/capacity/footprints'),
+    saveFootprint: (code: string, polygon: Array<[number, number]>) =>
+      apiRequest<any>(`/capacity/footprint/${code}`, { method: 'PUT', body: JSON.stringify({ polygon }) }),
+    clearFootprint: (code: string) =>
+      apiRequest<any>(`/capacity/footprint/${code}`, { method: 'DELETE' }),
     getZones: (warehouseId = 'WH-HOS') => apiRequest<any[]>(`/zones?warehouse_id=${warehouseId}`),
     getZone: (zoneId: string) => apiRequest<any>(`/zones/${zoneId}`),
     createZone: (data: any) => apiRequest<any>('/zones', { method: 'POST', body: JSON.stringify(data) }),
