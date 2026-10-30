@@ -246,3 +246,4 @@ export async function runRedTeamSuite(adminUserId: mongoose.Types.ObjectId): Pro
     attempts,
   };
 }
+
