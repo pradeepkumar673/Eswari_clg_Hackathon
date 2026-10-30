@@ -28,6 +28,7 @@ import { FieldReport } from '../models/field-reports.js';
 import { AuditLog } from '../models/audit-logs.js';
 import { TransferLane } from '../models/transfer-lanes.js';
 import { getBandForScore } from '../services/impactEngine.js';
+import { getDecisionReplay } from '../services/replay.js';
 
 export const disruptionsRouter = Router();
 
@@ -390,6 +391,30 @@ disruptionsRouter.get(
 
       res.json({ disruption_id: id, routes });
     } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /disruptions/:id/replay — Decision Replay (Step 10, A5)
+// ---------------------------------------------------------------------------
+disruptionsRouter.get(
+  '/:id/replay',
+  authenticateToken,
+  requirePermission('view_intelligence'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const upTo = req.query.upTo ? parseInt(req.query.upTo as string, 10) : undefined;
+
+      const replay = await getDecisionReplay(id, upTo);
+      res.status(200).json(replay);
+    } catch (e: any) {
+      if (e.message && e.message.includes('not found')) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: e.message } });
+        return;
+      }
       next(e);
     }
   },

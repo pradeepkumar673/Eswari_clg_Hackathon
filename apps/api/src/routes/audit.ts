@@ -12,6 +12,7 @@ import mongoose from 'mongoose';
 import { config } from '../config.js';
 import { authenticateToken, requirePermission } from '../middleware/auth.js';
 import { AuditLog } from '../models/audit-logs.js';
+import { ExecutionLedger } from '../models/execution-ledger.js';
 import { verifyChain } from '../services/audit.js';
 
 export const auditRouter = Router();
@@ -110,7 +111,37 @@ adminTamperRouter.post(
       return;
     }
 
-    const { row_id, new_action = 'TAMPERED_ACTION' } = req.body || {};
+    const { row_id, new_action = 'TAMPERED_ACTION', target = 'audit' } = req.body || {};
+
+    if (target === 'ledger' || target === 'execution_ledger') {
+      let targetRow;
+      if (row_id) {
+        targetRow = await ExecutionLedger.findById(row_id);
+      } else {
+        targetRow = await ExecutionLedger.findOne({}).sort({ seq: -1 });
+      }
+
+      if (!targetRow) {
+        res.status(404).json({ error: 'Not Found', message: 'No ledger row available to tamper' });
+        return;
+      }
+
+      const originalType = targetRow.step_type;
+      await ExecutionLedger.collection.updateOne(
+        { _id: targetRow._id },
+        { $set: { step_type: 'TAMPERED_STEP' } },
+      );
+
+      res.json({
+        ok: true,
+        target: 'execution_ledger',
+        tampered_row_id: targetRow._id.toString(),
+        seq: targetRow.seq,
+        original_step_type: originalType,
+        new_step_type: 'TAMPERED_STEP',
+      });
+      return;
+    }
 
     let targetRow;
     if (row_id) {

@@ -14,8 +14,18 @@ import { approvalsRouter } from './routes/approvals.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { guardrailsRouter } from './routes/guardrails.js';
 import { overviewRouter } from './routes/overview.js';
+import { notificationsRouter } from './routes/notifications.js';
+import { alertsRouter } from './routes/alerts.js';
+import { detectorsRouter } from './routes/detectors.js';
+import { kpisRouter } from './routes/kpis.js';
+import { spofRouter } from './routes/spof.js';
+import { lineageRouter } from './routes/lineage.js';
+import { initNotificationSubscribers } from './services/notifications.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
+
+// Initialize domain bus event subscribers for notifications
+initNotificationSubscribers();
 
 export const app = express();
 
@@ -115,6 +125,24 @@ app.use('/guardrails', guardrailsRouter);
 
 app.use('/api/v1/overview', overviewRouter);
 app.use('/overview', overviewRouter);
+
+app.use('/api/v1/overview', kpisRouter);
+app.use('/overview', kpisRouter);
+
+app.use('/api/v1/notifications', notificationsRouter);
+app.use('/notifications', notificationsRouter);
+
+app.use('/api/v1/alerts', alertsRouter);
+app.use('/alerts', alertsRouter);
+
+app.use('/api/v1/detectors', detectorsRouter);
+app.use('/detectors', detectorsRouter);
+
+app.use('/api/v1/risk', spofRouter);
+app.use('/risk', spofRouter);
+
+app.use('/api/v1/orders', lineageRouter);
+app.use('/orders', lineageRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

@@ -18,7 +18,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 7 | Solver service and recovery plan generation | **STEP 7: PASS** |
 | 8 | Proof checker, Decision Contract and governed approvals | **STEP 8: PASS** |
 | 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | **STEP 9: PASS** |
-| 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | NOT STARTED |
+| 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | **STEP 10: PASS** |
 | 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | NOT STARTED |
 | 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | NOT STARTED |
 | 13 | Frontend shell, design system and screens 1 to 4 | NOT STARTED |
@@ -199,15 +199,44 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
     - `GET /plans/:id/guardrails`: returns check rows for plan version.
   - Auto-triggering: Re-runs guardrails and promise dates automatically on any `submit` and `PATCH`.
 
+### Step 10 — Control tower backend and audit replay (PASS)
+- **Part A: Notifications, detectors, alerts, KPIs, SPOF radar (A1, B6, B7, B3, B1, A12)**:
+  - `apps/api/src/services/notifications.ts` & `apps/api/src/routes/notifications.ts`:
+    - Fan-out on 5 triggers (`DISRUPTION_OPENED`, `PLAN_SUBMITTED`, `APPROVAL_DECIDED`, `GUARDRAIL_ESCALATION`, `RECOVERY_STATUS_CHANGED`).
+    - Multi-channel delivery (`IN_APP`, `EMAIL_SIM`, `WHATSAPP_SIM`) with deterministic deduplication keys.
+    - Endpoints: `GET /notifications`, `GET /notifications/outbox?channel=`, `PATCH /notifications/:id/read`.
+  - `apps/api/src/services/detectors.ts` & `apps/api/src/routes/detectors.ts`:
+    - Late-Shipment Detector (B6): flags shipments late by > grace (default 60 min) or past arrival without delivery; opens/refreshes disruption through impact pipeline; idempotent.
+    - Stock Alerts Engine (B7): detects `BELOW_THRESHOLD` and `PROJECTED_SHORTAGE` inside horizon window. Automatically marks cleared when stock recovers.
+    - `POST /detectors/run`: manual detector sweep.
+  - `apps/api/src/routes/alerts.ts`:
+    - `GET /alerts`: alert feed with severity filters.
+    - `POST /alerts/:id/ack`: alert acknowledgement.
+    - Chart endpoints: `GET /alerts/chart/penalty-exposure`, `GET /alerts/chart/open-disruptions`, `GET /alerts/chart/import-quality`.
+  - `apps/api/src/routes/kpis.ts`:
+    - `GET /overview/kpis`: 6 cards (shipments in transit, delayed shipments, items below threshold, open orders, at-risk orders, penalty exposure) returning exact counts and list items.
+  - `apps/api/src/services/spofRadar.ts` & `apps/api/src/routes/spof.ts`:
+    - SPOF Radar (A12): computes `100 * (0.50 * share_orders + 0.30 * share_penalty + 0.20 * alt_factor)`.
+    - Upserts `spof_snapshots` with rank and raises SPOF alerts for top-ranked nodes.
+    - `GET /risk/spof`: returns ranked SPOF nodes with exposed orders and missing alternative details.
+- **Part B: Decision Replay, Event Lineage, Provenance (A5, A8, B17)**:
+  - `apps/api/src/services/replay.ts` & `apps/api/src/routes/disruptions.ts`:
+    - `GET /disruptions/:id/replay?upTo=`: chronological timeline of audit and event steps. Reconstructs past state (resolved ETA, risk score, plan status) from audit before/after snapshots at step `upTo`.
+  - `apps/api/src/services/lineage.ts` & `apps/api/src/routes/lineage.ts`:
+    - `GET /orders/:id/lineage?disruption=`: builds causal chain (Supplier delay -> Shipment delay -> Warehouse shortage -> Order deficit) with mandatory evidence IDs and calculation formulas.
+  - `apps/api/src/routes/audit.ts`:
+    - `GET /audit/verify`: verifies cryptographic hash chains for both `audit_logs` and `execution_ledger`.
+    - `POST /admin/demo/tamper`: supports mutating either `audit_logs` or `execution_ledger` for demo tamper detection.
+
 ---
 
 ## NEXT STEP
 
-**Step 10 — Control tower backend and audit replay (A1, A12, B1, B3, B6, B7, A5, A8, B17)**
+**Step 11 — Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices (A6, A10, B8, B13, B9, B10, B18)**
 - Target Model: SONNET 4.6
 - Deliverables:
-  - Part A: Notifications (A1), Late-Shipment Detector (B6), Stock alerts (B7), Alert feed (B3), KPI strip (B1), SPOF radar (A12).
-  - Part B: Decision Replay (A5), Event Lineage (A8), Provenance (B17) for audit_logs and execution_ledger.
+  - Part A: Playbook memory (A6), fingerprints (A10), supplier scorecards (B8), cover and drift (B13).
+  - Part B: Approval delegation (B9), master data CRUD (B10), customer notices (B18).
 
 ---
 
