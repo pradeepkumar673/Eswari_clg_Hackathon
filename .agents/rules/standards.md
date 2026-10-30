@@ -20,3 +20,4 @@
    - Follow `docs/DESIGN.md` for all frontend development.
    - Enforce WCAG AA contrast, keyboard accessibility, clean layouts, and zero hardcoded numbers.
    - Run Impeccable detect on UI components.
+
