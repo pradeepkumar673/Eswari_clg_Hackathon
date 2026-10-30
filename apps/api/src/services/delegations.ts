@@ -210,3 +210,4 @@ export async function hasDelegatorRelinquishedRights(
   const count = await ApprovalDelegation.countDocuments(query);
   return count > 0;
 }
+

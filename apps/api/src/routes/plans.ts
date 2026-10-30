@@ -45,6 +45,7 @@ import { computePromiseDatesForPlan } from '../services/promiseDates.js';
 import { GuardrailCheck } from '../models/guardrail-checks.js';
 import { ExecutionLedger } from '../models/execution-ledger.js';
 import { ApprovalDelegation } from '../models/approval-delegations.js';
+import { SimulationRun } from '../models/simulation-runs.js';
 import { writeAudit, writeLedgerEntry } from '../services/audit.js';
 import { withTransaction } from '../db/withTransaction.js';
 import { simClock } from '../services/simClock.js';
@@ -473,6 +474,13 @@ plansRouter.post(
       const { id } = req.params;
       if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
 
+      // Check if id belongs to a simulation run
+      const isSim = await SimulationRun.findById(id);
+      if (isSim) {
+        err(res, 409, 'CANNOT_SUBMIT_SIMULATION', 'Cannot submit a simulation run as an operational recovery plan');
+        return;
+      }
+
       const plan = await RecoveryPlan.findById(id);
       if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
 
@@ -564,6 +572,13 @@ plansRouter.delete(
       const { id } = req.params;
       if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
 
+      // Check if id belongs to a simulation run
+      const isSim = await SimulationRun.findById(id);
+      if (isSim) {
+        err(res, 409, 'CANNOT_SUBMIT_SIMULATION', 'Cannot submit a simulation run as an operational recovery plan');
+        return;
+      }
+
       const plan = await RecoveryPlan.findById(id);
       if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
 
@@ -593,6 +608,13 @@ plansRouter.post(
     try {
       const { id } = req.params;
       if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      // Check if id belongs to a simulation run
+      const isSim = await SimulationRun.findById(id);
+      if (isSim) {
+        err(res, 409, 'CANNOT_SUBMIT_SIMULATION', 'Cannot submit a simulation run as an operational recovery plan');
+        return;
+      }
 
       const plan = await RecoveryPlan.findById(id);
       if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
@@ -1062,6 +1084,13 @@ plansRouter.patch(
     try {
       const { id } = req.params;
       if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      // Check if id belongs to a simulation run
+      const isSim = await SimulationRun.findById(id);
+      if (isSim) {
+        err(res, 409, 'CANNOT_SUBMIT_SIMULATION', 'Cannot submit a simulation run as an operational recovery plan');
+        return;
+      }
 
       const plan = await RecoveryPlan.findById(id);
       if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }

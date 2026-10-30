@@ -20,7 +20,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | **STEP 9: PASS** |
 | 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | **STEP 10: PASS** |
 | 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | **STEP 11: PASS** |
-| 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | NOT STARTED |
+| 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | **STEP 12: PASS (BACKEND COMPLETE)** |
 | 13 | Frontend shell, design system and screens 1 to 4 | NOT STARTED |
 | 14 | Screens 5 and 6, notification drawer, Ask drawer, network map and add-on panels | NOT STARTED |
 | 15 | Screens 7 and 8, voice in the browser and operator phone view | NOT STARTED |
@@ -262,16 +262,40 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
     - `POST /customer-notices/:id/release`: Manager only, requires approved/executed plan, verifies `NOTICE_DATE_MATCHES` claim, releases to simulated outbox.
     - No public or customer-facing route exposed.
 
+### Step 12 - Ask the Desk, What-If, stress test, red-team (PASS - BACKEND COMPLETE)
+- **Part A: Ask the Desk (B4) and What-If Simulator (B14)**:
+  - `apps/api/src/services/askDesk.ts` & `apps/api/src/routes/askDesk.ts`:
+    - `POST /ask`: Read-only conversational operations assistant; warehouse-scoped for Warehouse_Operator.
+    - Fixed parameterised query intent matcher for: affected orders, today's disruptions, items below threshold, supplier delays, pending approvals.
+    - Extracts numbers and codes into verified `ANSWER_FACT` claims.
+    - Write intent detection (`approve`, `cancel`, `delete`, `change stock`, etc.): refused with operational notice and audited in `audit_logs` (`UNAUTHORIZED_WRITE_INTENT_REFUSED`), leaving DB state untouched.
+    - `GET /ask/chips`: returns suggested query chips.
+  - `apps/api/src/services/whatif.ts` & `apps/api/src/routes/whatif.ts`:
+    - `POST /whatif/run`: In-memory sandbox simulation with overrides (`delay_hours`, `damaged_units`, `lane_lead_hours`, `supplier_capacity`, `stock_correction`). Runs impact walk, risk formula, solver, and guardrails without modifying live inventory, plans, or ledger.
+    - Results marked `SIMULATION` (plan_id: null); persisted only to `simulation_runs`.
+    - `POST /plans/:id/submit` with a simulation run ID is rejected with 409 (`CANNOT_SUBMIT_SIMULATION`).
+    - `GET /whatif/:id/event-card`: returns pre-filled draft event card for `POST /events` without creating anything.
+- **Part B: Stress-Test mode (A11) and Red-Team suite (S3)**:
+  - `apps/api/src/services/stressTest.ts` & `apps/api/src/routes/adminOps.ts`:
+    - `POST /admin/stress/run` (Admin, DEMO_MODE): Synthetic chaos injectors (`duplicate_webhooks`, `invalid_csv_rows`, `conflicting_etas`, `simultaneous_supplier_failures`, `sudden_inventory_corrections`).
+    - Reports counts (`applied`, `ignored`, `stale`, `quarantined`, `held`, `rejected`, `unhandled_errors: 0`) and validates state integrity (`reserved <= on_hand`, hash chain valid, 0 duplicate alerts).
+    - `POST /admin/stress/cleanup`: targeted cleanup of stress run records.
+  - `apps/api/src/services/redTeam.ts` & `apps/api/src/routes/adminOps.ts`:
+    - `POST /admin/red-team/run` (Admin): Executes 15 real bypass attempts against governed API paths (Analyst self-approval, Admin approval, Operator cross-warehouse access, forged JWT, unsigned webhook, replayed webhook, tampered contract hash, approving blocked plan, executing without approval, executing as creator, direct on_hand edit, submitting simulation, rolling back non-executed plan, releasing notice before approval, write intent in Ask the Desk).
+    - 15 of 15 verified BLOCKED with audit log record IDs.
+  - CLI scripts added to root `package.json`:
+    - `npm run stress`: invokes `scripts/run-stress.ts`.
+    - `npm run redteam`: invokes `scripts/run-redteam.ts`.
+
 ---
 
 ## NEXT STEP
 
-**Step 12 — Ask the Desk, What-If, stress test and red-team (B4, B14, A11, S3)**
-- Target Model: OPUS 4.6
+**Step 13 — Frontend shell, design system and screens 1 to 4 (Impeccable)**
+- Target Model: SONNET 4.6
 - Deliverables:
-  - Part A: Ask the Desk (B4) and What-If Simulator (B14).
-  - Part B: Stress-Test mode (A11) and Red-Team suite (S3).
-- BACKEND COMPLETE milestone.
+  - Part A: Shell and design system (tokens, components, theme, auth, navigation).
+  - Part B: Screens 1 to 4 on live data (Sign-in, Operations cockpit, Intake and quarantine, Disruption investigation).
 
 ---
 

@@ -24,3 +24,4 @@ projectionsRouter.get(
     }
   },
 );
+

@@ -26,6 +26,9 @@ import { projectionsRouter } from './routes/projections.js';
 import { shipmentsRouter } from './routes/shipments.js';
 import { masterDataRouter } from './routes/masterdata.js';
 import { customerNoticesRouter } from './routes/notices.js';
+import { askDeskRouter } from './routes/askDesk.js';
+import { whatifRouter } from './routes/whatif.js';
+import { adminOpsRouter } from './routes/adminOps.js';
 import { initNotificationSubscribers } from './services/notifications.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
@@ -170,6 +173,15 @@ app.use('/', masterDataRouter);
 
 app.use('/api/v1', customerNoticesRouter);
 app.use('/', customerNoticesRouter);
+
+app.use('/api/v1/ask', askDeskRouter);
+app.use('/ask', askDeskRouter);
+
+app.use('/api/v1/whatif', whatifRouter);
+app.use('/whatif', whatifRouter);
+
+app.use('/api/v1/admin', adminOpsRouter);
+app.use('/admin', adminOpsRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();
