@@ -188,18 +188,21 @@ export function RiskBandChip({
 // ---------------------------------------------------------------------------
 export function MoneyText({
   amount,
+  amountInr,
   className,
 }: {
-  amount: number | null | undefined;
+  amount?: number | null | undefined;
+  amountInr?: number | null | undefined;
   className?: string;
 }) {
-  if (amount === null || amount === undefined) return <span className="font-mono text-slate-500">—</span>;
+  const val = amount !== undefined ? amount : amountInr;
+  if (val === null || val === undefined) return <span className="font-mono text-slate-500">—</span>;
 
   const formatted = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(val);
 
   return <span className={cn('font-mono font-medium text-slate-100', className)}>{formatted}</span>;
 }
@@ -209,16 +212,19 @@ export function MoneyText({
 // ---------------------------------------------------------------------------
 export function TimeText({
   date,
+  iso,
   format = 'full',
   className,
 }: {
-  date: Date | string | null | undefined;
+  date?: Date | string | null | undefined;
+  iso?: string;
   format?: 'full' | 'short' | 'timeOnly';
   className?: string;
 }) {
-  if (!date) return <span className="font-mono text-slate-500">—</span>;
+  const targetDate = date !== undefined ? date : iso;
+  if (!targetDate) return <span className="font-mono text-slate-500">—</span>;
 
-  const d = new Date(date);
+  const d = new Date(targetDate);
   if (isNaN(d.getTime())) return <span className="font-mono text-slate-500">Invalid</span>;
 
   const options: Intl.DateTimeFormatOptions = {
@@ -415,18 +421,21 @@ export function Dialog({
 // ---------------------------------------------------------------------------
 export function Drawer({
   isOpen,
+  open,
   onClose,
   title,
   children,
   width = 'max-w-md',
 }: {
-  isOpen: boolean;
+  isOpen?: boolean;
+  open?: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
   width?: string;
 }) {
-  if (!isOpen) return null;
+  const isVisible = isOpen ?? open ?? false;
+  if (!isVisible) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">

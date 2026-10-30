@@ -197,4 +197,74 @@ export const api = {
         body: JSON.stringify(overrides),
       }),
   },
+
+  // Impact & Risk
+  impact: {
+    getRisks: (disruptionId: string) =>
+      apiRequest<any>(`/disruptions/${disruptionId}/risks`),
+    getImpact: (disruptionId: string) =>
+      apiRequest<any>(`/disruptions/${disruptionId}/impact`),
+    getHeatgrid: (disruptionId: string) =>
+      apiRequest<any>(`/disruptions/${disruptionId}/heatgrid`),
+    getEvidence: (type: string, id: string) =>
+      apiRequest<any>(`/evidence/${type}/${id}`),
+    getLineage: (orderId: string, disruptionId?: string) =>
+      apiRequest<any>(`/orders/${orderId}/lineage${disruptionId ? `?disruption=${disruptionId}` : ''}`),
+    getCover: () =>
+      apiRequest<any>('/projections/cover'),
+  },
+
+  // Recovery Workbench
+  recovery: {
+    generatePlan: (disruptionId: string) =>
+      apiRequest<any>(`/disruptions/${disruptionId}/recovery-plans`, { method: 'POST' }),
+    getPlan: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}`),
+    getTradeoffs: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/tradeoffs`),
+    getCards: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/cards`),
+    verifyPlan: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/verify`, { method: 'POST' }),
+    challengePlan: (planId: string, claimText?: string, expected?: number, actual?: number) =>
+      apiRequest<any>(`/plans/${planId}/challenge`, {
+        method: 'POST',
+        body: JSON.stringify({ claim_text: claimText, expected, actual }),
+      }),
+    clearChallenge: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/challenge`, { method: 'DELETE' }),
+    submitPlan: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/submit`, { method: 'POST' }),
+    getGuardrails: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/guardrails`),
+    getPromiseDates: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/promise-dates`),
+    updatePromiseDate: (planId: string, orderId: string, committedDate: string) =>
+      apiRequest<any>(`/plans/${planId}/promise-dates`, {
+        method: 'PATCH',
+        body: JSON.stringify({ order_id: orderId, committed_date: committedDate }),
+      }),
+  },
+
+  // Notifications
+  notifications: {
+    getNotifications: () =>
+      apiRequest<any[]>('/notifications'),
+    getOutbox: (channel?: string) =>
+      apiRequest<any[]>(`/notifications/outbox${channel ? `?channel=${channel}` : ''}`),
+    markRead: (id: string) =>
+      apiRequest<any>(`/notifications/${id}/read`, { method: 'PATCH' }),
+  },
+
+  // Master Data & Network
+  network: {
+    getNodes: async () => {
+      const [whs, sups, lanes] = await Promise.all([
+        apiRequest<any[]>('/admin/master/warehouses').catch(() => []),
+        apiRequest<any[]>('/admin/master/suppliers').catch(() => []),
+        apiRequest<any[]>('/admin/master/lanes').catch(() => []),
+      ]);
+      return { warehouses: whs, suppliers: sups, lanes };
+    },
+  },
 };

@@ -34,3 +34,4 @@ DisruptionIQ is a high-trust, calm, precision operational "Control Tower" design
 6. **Recovery Workbench** (`/recovery`): Decision Contract, baseline vs plan, trade-off ledger, proof claims checker, submission.
 7. **Approvals & Execution** (`/approvals`): Role-governed approval queue, delegations, conflict court, execution ledger trigger, customer notices.
 8. **Audit & Security** (`/audit`): Cryptographic hash chain verification, before/after ledger, red-team bypass report, stress test controls.
+
