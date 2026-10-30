@@ -17,16 +17,20 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "db:start": "node scripts/db-start.mjs",
-    "db:seed": "node --loader ts-node/esm scripts/seed.ts",
-    "db:reset": "node --loader ts-node/esm scripts/reset.ts",
+    "db:seed": "npx tsx scripts/seed.ts",
+    "db:reset": "npx tsx scripts/reset.ts",
     "scan:placeholders": "node scripts/scan-placeholders.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "eslint": "^9.20.1",
     "prettier": "^3.5.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3"
   }
 }
-
