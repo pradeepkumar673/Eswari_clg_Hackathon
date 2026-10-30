@@ -1,7 +1,7 @@
 /**
  * apps/web/src/screens/InvestigationScreen.tsx
  *
- * Screen 4: Disruption Investigation.
+ * Screen 4: Disruption Investigation (Bright Executive Theme).
  * - Resolved ETA with reason & lineage basis
  * - Event timeline with state chips (APPLIED, DUPLICATE, STALE, CONFLICT, REJECTED)
  * - Conflict card with Resolve action
@@ -133,26 +133,26 @@ export function InvestigationScreen() {
   const shipment = selectedDisruption?.shipment_id;
 
   return (
-    <div className="p-6 space-y-6 text-slate-100 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 text-slate-900 max-w-7xl mx-auto">
       {/* Top Header & Disruption Selector */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Disruption Investigation</h1>
-          <p className="text-xs text-slate-400">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Disruption Investigation</h1>
+          <p className="text-xs text-slate-500">
             Event reconciliation, truth audit, decision replay, and voice-assisted field intake
           </p>
         </div>
 
         {disruptions.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Select Disruption:</span>
+            <span className="text-xs text-slate-500 font-medium">Select Disruption:</span>
             <select
               value={selectedDisruption?._id}
               onChange={(e) => {
                 const found = disruptions.find((d) => d._id === e.target.value);
                 if (found) setSelectedDisruption(found);
               }}
-              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200"
+              className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
             >
               {disruptions.map((d) => (
                 <option key={d._id} value={d._id}>
@@ -171,59 +171,59 @@ export function InvestigationScreen() {
         {/* Left Column (2 spans): Resolved ETA & Timeline / Replay */}
         <div className="lg:col-span-2 space-y-6">
           {/* Resolved ETA Card */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                 Belief-ETA Reconciliation (Step 5B)
               </span>
               <RiskBandChip band={selectedDisruption?.severity} />
             </div>
 
-            <div className="flex flex-wrap items-baseline gap-4 pt-1">
+            <div className="flex flex-wrap items-baseline gap-6 pt-1">
               <div>
                 <span className="text-xs text-slate-500 block">Current ETA</span>
-                <TimeText date={shipment?.current_eta || selectedDisruption?.detected_at} className="text-sm font-bold text-amber-400" />
+                <TimeText date={shipment?.current_eta || selectedDisruption?.detected_at} className="text-sm font-bold text-amber-700" />
               </div>
               <div>
                 <span className="text-xs text-slate-500 block">Promised ETA</span>
-                <TimeText date={shipment?.promised_eta || selectedDisruption?.detected_at} className="text-sm font-mono text-slate-300" />
+                <TimeText date={shipment?.promised_eta || selectedDisruption?.detected_at} className="text-sm font-mono text-slate-700 font-medium" />
               </div>
               <div>
                 <span className="text-xs text-slate-500 block">Total Shift</span>
-                <span className="text-sm font-mono font-bold text-red-400">
+                <span className="text-sm font-mono font-bold text-rose-700">
                   +{selectedDisruption?.delay_hours ?? 4} Hours
                 </span>
               </div>
             </div>
 
-            <p className="text-xs text-slate-400 pt-1">
-              <strong>Lineage Basis:</strong> Carrier webhook reported severe traffic delay at Toll Plaza. Reconciler
+            <p className="text-xs text-slate-600 pt-1">
+              <strong className="text-slate-800">Lineage Basis:</strong> Carrier webhook reported severe traffic delay at Toll Plaza. Reconciler
               selected latest trusted timestamp over GPS stale beacon.
             </p>
           </div>
 
           {/* Timeline vs Decision Replay Toggle */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-4">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
             {playbookCases.length > 0 && (
-              <div className="p-3 rounded bg-indigo-950/40 border border-indigo-800 text-xs text-indigo-200">
-                <span className="font-semibold text-indigo-300">Playbook Memory Insight (A6):</span>{' '}
+              <div className="p-3.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-900">
+                <span className="font-semibold text-indigo-950">Playbook Memory Insight (A6):</span>{' '}
                 {playbookCases[0].insight}
               </div>
             )}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setReplayActive(false)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
-                    !replayActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
+                    !replayActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
                   Event Timeline ({events.length})
                 </button>
                 <button
                   onClick={() => setReplayActive(true)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
-                    replayActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
+                    replayActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
                   A5 Decision Replay ({replaySteps.length} Steps)
@@ -231,7 +231,7 @@ export function InvestigationScreen() {
               </div>
 
               {replayActive && (
-                <span className="text-[11px] font-mono text-indigo-400 font-semibold">
+                <span className="text-[11px] font-mono text-indigo-600 font-semibold">
                   Step {currentStepIndex + 1} of {replaySteps.length || 1}
                 </span>
               )}
@@ -246,15 +246,15 @@ export function InvestigationScreen() {
                   events.map((evt: any, i: number) => (
                     <div
                       key={evt._id || i}
-                      className="p-3 rounded bg-slate-950 border border-slate-800 flex items-start justify-between gap-3 text-xs"
+                      className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex items-start justify-between gap-3 text-xs"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <StatusChip status={evt.status} />
-                          <span className="font-semibold text-slate-200">{evt.event_type}</span>
+                          <span className="font-semibold text-slate-900">{evt.event_type}</span>
                           <span className="text-slate-500 font-mono">({evt.source})</span>
                         </div>
-                        <p className="text-slate-400 text-[11px]">{evt.notes || 'Inbound telemetry update.'}</p>
+                        <p className="text-slate-600 text-[11px]">{evt.notes || 'Inbound telemetry update.'}</p>
                         <TimeText date={evt.occurred_at || evt.created_at} format="short" />
                       </div>
 
@@ -284,7 +284,7 @@ export function InvestigationScreen() {
               /* View 2: A5 Decision Replay Scrubber */
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs text-slate-400">
+                  <div className="flex justify-between text-xs text-slate-500">
                     <span>Initial Observation</span>
                     <span>Current Reconstructed State</span>
                   </div>
@@ -294,21 +294,21 @@ export function InvestigationScreen() {
                     max={Math.max(0, replaySteps.length - 1)}
                     value={currentStepIndex}
                     onChange={(e) => setCurrentStepIndex(parseInt(e.target.value, 10))}
-                    className="w-full accent-indigo-500 cursor-pointer"
+                    className="w-full accent-indigo-600 cursor-pointer"
                   />
                 </div>
 
                 {replaySteps[currentStepIndex] ? (
-                  <div className="p-3 rounded bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-indigo-300">
+                      <span className="font-semibold text-indigo-700">
                         {replaySteps[currentStepIndex].action || 'SYSTEM_SNAPSHOT'}
                       </span>
                       <TimeText date={replaySteps[currentStepIndex].timestamp} />
                     </div>
-                    <p className="text-slate-400">{replaySteps[currentStepIndex].description || 'State snapshot.'}</p>
-                    <div className="p-2 rounded bg-slate-900 border border-slate-800/80 font-mono text-[11px] text-slate-300">
-                      Reconstructed Status: {replaySteps[currentStepIndex].reconstructed_state?.status || 'NORMAL'}
+                    <p className="text-slate-700">{replaySteps[currentStepIndex].description || 'State snapshot.'}</p>
+                    <div className="p-2 rounded bg-white border border-slate-200 font-mono text-[11px] text-slate-800">
+                      Reconstructed Status: <strong className="text-slate-900">{replaySteps[currentStepIndex].reconstructed_state?.status || 'NORMAL'}</strong>
                     </div>
                   </div>
                 ) : (
@@ -322,8 +322,8 @@ export function InvestigationScreen() {
         {/* Right Column: B8 Supplier Scorecard & Voice Confirm Panel */}
         <div className="space-y-6">
           {/* B8 Supplier Scorecard */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider pb-2 border-b border-slate-100">
               B8 Supplier Performance Scorecard
             </h3>
 
@@ -332,10 +332,10 @@ export function InvestigationScreen() {
             ) : (
               <div className="space-y-2 text-xs">
                 {scorecards.slice(0, 3).map((sc: any, idx: number) => (
-                  <div key={idx} className="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-1">
-                    <div className="flex items-center justify-between font-semibold text-slate-200">
+                  <div key={idx} className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="flex items-center justify-between font-semibold text-slate-900">
                       <span>{sc.supplier_name || 'Tata Logistics'}</span>
-                      <span className={sc.on_time_rate < 0.7 ? 'text-red-400' : 'text-emerald-400'}>
+                      <span className={sc.on_time_rate < 0.7 ? 'text-rose-700 font-bold' : 'text-emerald-700 font-bold'}>
                         {sc.on_time_rate ? `${Math.round(sc.on_time_rate * 100)}% OTD` : 'Calculating'}
                       </span>
                     </div>
@@ -350,37 +350,37 @@ export function InvestigationScreen() {
           </div>
 
           {/* Voice Panel with Tamil & English Confirm Card */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Mic className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-slate-200">Voice Field Report (English & தமிழ்)</h3>
+                <Mic className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-semibold text-slate-900">Voice Field Report (English & தமிழ்)</h3>
               </div>
-              <Languages className="w-4 h-4 text-slate-500" />
+              <Languages className="w-4 h-4 text-slate-400" />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div>
-                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">
                   Tamil Transcript (தமிழ்)
                 </label>
                 <textarea
                   rows={2}
                   value={tamilTranscript}
                   onChange={(e) => setTamilTranscript(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-slate-200"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">
                   English Translated Entity Extraction
                 </label>
                 <textarea
                   rows={2}
                   value={englishTranscript}
                   onChange={(e) => setEnglishTranscript(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-slate-200"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 

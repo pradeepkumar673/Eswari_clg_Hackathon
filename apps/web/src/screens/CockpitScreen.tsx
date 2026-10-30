@@ -1,7 +1,7 @@
 /**
  * apps/web/src/screens/CockpitScreen.tsx
  *
- * Screen 2: Operations Cockpit.
+ * Screen 2: Operations Cockpit (Bright Executive Theme).
  * - B1 KPI strip (6 clickable cards)
  * - Active disruptions, affected orders, pending approvals, recovery progress, conflicts
  * - A12 SPOF radar tile
@@ -149,12 +149,12 @@ export function CockpitScreen() {
   const activeFps = fingerprints.filter((f) => f.active);
 
   return (
-    <div className="p-6 space-y-6 text-slate-100 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 text-slate-900 max-w-7xl mx-auto">
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Operations Cockpit</h1>
-          <p className="text-xs text-slate-400">Live operational telemetry and disruption command center</p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Operations Cockpit</h1>
+          <p className="text-xs text-slate-500">Live operational telemetry and disruption command center</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -163,28 +163,28 @@ export function CockpitScreen() {
             onClick={handleRunDetectors}
             loading={detectorRunning}
           >
-            <Zap className="w-3.5 h-3.5 text-amber-400 mr-1" /> Run Detectors
+            <Zap className="w-3.5 h-3.5 text-amber-500 mr-1" /> Run Detectors
           </Button>
           <Button variant="outline" size="sm" onClick={fetchData}>
-            <RotateCcw className="w-3.5 h-3.5 mr-1" /> Refresh
+            <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-500" /> Refresh
           </Button>
         </div>
       </div>
 
       {/* A10 Fingerprint Warning Banner */}
       {activeFps.length > 0 && (
-        <div className="p-3.5 rounded-lg bg-amber-950/40 border border-amber-800/80 flex items-center justify-between text-amber-200">
+        <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between text-amber-900 shadow-xs">
           <div className="flex items-center gap-2.5 text-xs">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              <strong>HISTORICAL PATTERN MATCH (A10):</strong> Detected recurrent disruption fingerprint{' '}
-              <code className="px-1 py-0.5 rounded bg-black/40 font-mono text-[11px] text-amber-300">
+              <strong className="font-semibold text-amber-950">HISTORICAL PATTERN MATCH (A10):</strong> Detected recurrent disruption fingerprint{' '}
+              <code className="px-1.5 py-0.5 rounded bg-amber-100 font-mono text-[11px] text-amber-900 font-medium border border-amber-200">
                 {activeFps[0].code.slice(0, 12)}...
               </code>{' '}
               with {activeFps[0].match_count} prior occurrences.
             </span>
           </div>
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-900/60 border border-amber-700 font-semibold">
+          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-semibold text-amber-800">
             PATTERN MATCH
           </span>
         </div>
@@ -234,7 +234,7 @@ export function CockpitScreen() {
         />
         <KpiCard
           title="Exposure"
-          value={`₹${Math.floor((kpis?.cards?.penalty_exposure?.count ?? 0) / 1000)}k`}
+          value={`INR ${Math.floor((kpis?.cards?.penalty_exposure?.count ?? 0) / 1000)}k`}
           subvalue="Hourly Penalty"
           status={kpis?.cards?.penalty_exposure?.count > 0 ? 'danger' : 'default'}
           active={selectedKpiFilter === 'penalty'}
@@ -247,16 +247,16 @@ export function CockpitScreen() {
         {/* Left Column (2 spans): Active Disruptions & Progress */}
         <div className="lg:col-span-2 space-y-6">
           {/* Recovery Progress Strip */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                 Overall Recovery Progress
               </span>
-              <span className="text-xs font-mono text-emerald-400 font-bold">
+              <span className="text-xs font-mono text-emerald-700 font-bold">
                 {overview?.summary?.recovery_percentage ?? 0}% Recovered
               </span>
             </div>
-            <div className="w-full h-2.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+            <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
               <div
                 className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                 style={{ width: `${overview?.summary?.recovery_percentage ?? 0}%` }}
@@ -270,45 +270,47 @@ export function CockpitScreen() {
           </div>
 
           {/* Active Disruptions Table */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-200">Active Disruptions</h3>
+          <div className="rounded-xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Active Disruptions</h3>
               <span className="text-xs text-slate-500 font-mono">
                 {overview?.active_disruptions?.length ?? 0} Active
               </span>
             </div>
             {overview?.active_disruptions?.length === 0 ? (
-              <EmptyState title="No active disruptions" description="All supply lines are tracking normal." />
+              <div className="p-4">
+                <EmptyState title="No active disruptions" description="All supply lines are tracking normal." />
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[10px] border-b border-slate-800">
+                  <thead className="bg-slate-50 text-slate-600 uppercase font-mono text-[10px] border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">Type</th>
-                      <th className="p-2.5">Severity</th>
-                      <th className="p-2.5">Shipment</th>
-                      <th className="p-2.5">Delay</th>
-                      <th className="p-2.5">Usable Qty</th>
-                      <th className="p-2.5">Detected</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Severity</th>
+                      <th className="p-3">Shipment</th>
+                      <th className="p-3">Delay</th>
+                      <th className="p-3">Usable Qty</th>
+                      <th className="p-3">Detected</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-100">
                     {overview?.active_disruptions?.map((d: any) => (
-                      <tr key={d._id} className="hover:bg-slate-800/40">
-                        <td className="p-2.5 font-medium text-slate-200">{d.disruption_type}</td>
-                        <td className="p-2.5">
+                      <tr key={d._id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-3 font-medium text-slate-900">{d.disruption_type}</td>
+                        <td className="p-3">
                           <RiskBandChip band={d.severity} />
                         </td>
-                        <td className="p-2.5 font-mono text-slate-300">
+                        <td className="p-3 font-mono text-slate-700">
                           {d.shipment_id?.code || d.shipment_code || 'SHP-???'}
                         </td>
-                        <td className="p-2.5 font-mono text-amber-400">
+                        <td className="p-3 font-mono text-amber-700 font-semibold">
                           {d.delay_hours ? `+${d.delay_hours}h` : '—'}
                         </td>
-                        <td className="p-2.5 font-mono text-slate-300">
+                        <td className="p-3 font-mono text-slate-700">
                           {d.usable_quantity}/{d.original_quantity}
                         </td>
-                        <td className="p-2.5">
+                        <td className="p-3">
                           <TimeText date={d.detected_at} format="short" />
                         </td>
                       </tr>
@@ -320,11 +322,11 @@ export function CockpitScreen() {
           </div>
 
           {/* A12 SPOF Radar Tile */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-red-400" />
-                <h3 className="text-sm font-semibold text-slate-200">SPOF Radar (A12) — High Risk Nodes</h3>
+                <ShieldAlert className="w-4 h-4 text-rose-600" />
+                <h3 className="text-sm font-semibold text-slate-900">SPOF Radar (A12) — High Risk Nodes</h3>
               </div>
               <span className="text-[11px] font-mono text-slate-500">50% Orders · 30% Penalty · 20% Alt Factor</span>
             </div>
@@ -335,10 +337,10 @@ export function CockpitScreen() {
                 {spof.slice(0, 4).map((node: any, i: number) => (
                   <div
                     key={node.node_id || i}
-                    className="p-2.5 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                    className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-semibold text-slate-200">
+                      <div className="font-semibold text-slate-900">
                         #{i + 1} {node.node_name || node.node_code || 'Primary Supplier'} ({node.node_type})
                       </div>
                       <div className="text-[11px] text-slate-500 mt-0.5">
@@ -346,7 +348,7 @@ export function CockpitScreen() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="font-mono text-red-400 font-bold text-sm">
+                      <span className="font-mono text-rose-600 font-bold text-sm">
                         {Math.round(node.spof_score ?? 80)}/100
                       </span>
                     </div>
@@ -360,31 +362,33 @@ export function CockpitScreen() {
         {/* Right Column: B3 Alert Feed & Recharts */}
         <div className="space-y-6">
           {/* Alert Feed */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-200">Alert Feed (B3)</h3>
+          <div className="rounded-xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Alert Feed (B3)</h3>
               <span className="text-xs text-slate-500 font-mono">{alerts.length} Total</span>
             </div>
             {alerts.length === 0 ? (
-              <EmptyState title="All clear" description="Zero active operational alerts." />
+              <div className="p-4">
+                <EmptyState title="All clear" description="Zero active operational alerts." />
+              </div>
             ) : (
-              <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+              <div className="p-4 space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
                 {alerts.slice(0, 8).map((a: any) => (
                   <div
                     key={a._id}
-                    className="p-2.5 rounded bg-slate-950 border border-slate-800/80 space-y-1.5"
+                    className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5"
                   >
                     <div className="flex items-center justify-between">
                       <StatusChip status={a.severity} label={a.severity} />
                       <TimeText date={a.created_at} format="short" />
                     </div>
-                    <p className="text-xs text-slate-300 font-medium">{a.message || a.title}</p>
-                    <div className="flex items-center justify-between pt-1">
+                    <p className="text-xs text-slate-800 font-medium">{a.message || a.title}</p>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                       <span className="text-[10px] text-slate-500 font-mono">{a.alert_type}</span>
                       {a.status === 'ACTIVE' && (
                         <button
                           onClick={() => handleAckAlert(a._id)}
-                          className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300"
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
                         >
                           Acknowledge
                         </button>
@@ -397,25 +401,25 @@ export function CockpitScreen() {
           </div>
 
           {/* Three Telemetry Charts */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-4">
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
             <div>
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 Penalty Exposure by Order
               </h3>
               <div className="h-32 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartPenalty.length > 0 ? chartPenalty : [{ name: 'ORD-1042', penalty: 5000 }, { name: 'ORD-1047', penalty: 3000 }, { name: 'ORD-1051', penalty: 8000 }]}>
-                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                    <YAxis stroke="#64748b" fontSize={10} />
-                    <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '11px' }} />
-                    <Bar dataKey="penalty" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} />
+                    <YAxis stroke="#94a3b8" fontSize={10} />
+                    <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#0f172a', fontSize: '11px', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }} />
+                    <Bar dataKey="penalty" fill="#f43f5e" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800">
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            <div className="pt-3 border-t border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 Open Disruptions by Type
               </h3>
               <div className="h-32 w-full">
@@ -430,26 +434,26 @@ export function CockpitScreen() {
                       outerRadius={45}
                       label={({ name }) => name}
                     >
-                      {['#ef4444', '#f59e0b', '#3b82f6'].map((color, idx) => (
+                      {['#f43f5e', '#f59e0b', '#6366f1'].map((color, idx) => (
                         <Cell key={idx} fill={color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '11px' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#0f172a', fontSize: '11px', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800">
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            <div className="pt-3 border-t border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 Import Quality Trend
               </h3>
               <div className="h-32 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartQuality.length > 0 ? chartQuality : [{ batch: 'B1', valid: 95 }, { batch: 'B2', valid: 98 }, { batch: 'B3', valid: 90 }]}>
-                    <XAxis dataKey="batch" stroke="#64748b" fontSize={10} />
-                    <YAxis stroke="#64748b" fontSize={10} />
-                    <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '11px' }} />
+                    <XAxis dataKey="batch" stroke="#94a3b8" fontSize={10} />
+                    <YAxis stroke="#94a3b8" fontSize={10} />
+                    <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#0f172a', fontSize: '11px', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }} />
                     <Line type="monotone" dataKey="valid" stroke="#10b981" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>

@@ -2,13 +2,15 @@
  * apps/web/src/ui/components.tsx
  *
  * Impeccable Design System Components for DisruptionIQ Control Tower.
+ * Bright Executive / Operations Control Tower Theme (Light Mode).
  *
  * Design Guidelines:
- * - Desktop-first, calm, high-trust precision
- * - Explicit Text + Color chips
- * - INR locale formatting (₹ en-IN)
+ * - Desktop-first, calm, high-trust precision with crisp daylight contrast
+ * - Authentic enterprise badge chips with soft tints & dark legible text
+ * - INR locale formatting (en-IN)
  * - Asia/Kolkata timestamps
  * - Loading, empty, error, and success states on all components
+ * - Zero dark AI slab containers
  */
 
 import React from 'react';
@@ -45,14 +47,14 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-50 disabled:pointer-events-none select-none';
+    'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:pointer-events-none select-none';
 
   const variants = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-500 focus:ring-indigo-500',
-    secondary: 'bg-slate-800 text-slate-200 hover:bg-slate-700 focus:ring-slate-400',
-    danger: 'bg-red-600 text-white hover:bg-red-500 focus:ring-red-500',
-    ghost: 'bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white',
-    outline: 'border border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white',
+    primary: 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs focus:ring-indigo-500',
+    secondary: 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-xs focus:ring-slate-400',
+    danger: 'bg-rose-600 text-white hover:bg-rose-700 shadow-xs focus:ring-rose-500',
+    ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+    outline: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-xs',
   };
 
   const sizes = {
@@ -82,8 +84,8 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
   return (
     <input
       className={cn(
-        'w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-slate-100',
-        'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors',
+        'w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm text-slate-900',
+        'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-xs transition-colors',
         className,
       )}
       {...props}
@@ -98,8 +100,8 @@ export function Select({ className, children, ...props }: React.SelectHTMLAttrib
   return (
     <select
       className={cn(
-        'w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-slate-100',
-        'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors',
+        'w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm text-slate-900',
+        'focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-xs transition-colors',
         className,
       )}
       {...props}
@@ -124,20 +126,22 @@ export function StatusChip({
   const upper = (status || '').toUpperCase();
   const text = label || upper;
 
-  let style = 'bg-slate-800 text-slate-300 border-slate-700';
+  let style = 'bg-slate-100 text-slate-700 border-slate-200';
 
   if (['APPLIED', 'APPROVED', 'RESOLVED', 'PASS', 'ACTIVE'].includes(upper)) {
-    style = 'bg-emerald-950/60 text-emerald-400 border-emerald-800';
+    style = 'bg-emerald-50 text-emerald-700 border-emerald-200';
   } else if (['CONFLICT', 'BREACH', 'REJECTED', 'CRITICAL', 'FAIL'].includes(upper)) {
-    style = 'bg-red-950/60 text-red-400 border-red-800';
+    style = 'bg-rose-50 text-rose-700 border-rose-200';
   } else if (['STALE', 'DUPLICATE', 'HELD', 'PENDING', 'WARNING'].includes(upper)) {
-    style = 'bg-amber-950/60 text-amber-400 border-amber-800';
+    style = 'bg-amber-50 text-amber-800 border-amber-200';
+  } else if (['IN_PROGRESS', 'RUNNING'].includes(upper)) {
+    style = 'bg-blue-50 text-blue-700 border-blue-200';
   }
 
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-medium border',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono font-medium border',
         style,
         className,
       )}
@@ -162,11 +166,11 @@ export function RiskBandChip({
 }) {
   const b = (band || (score !== undefined && score !== null ? (score >= 70 ? 'RED' : score >= 35 ? 'AMBER' : 'GREEN') : 'GREEN')).toUpperCase();
 
-  let style = 'bg-emerald-950/60 text-emerald-400 border-emerald-800';
+  let style = 'bg-emerald-50 text-emerald-700 border-emerald-200';
   if (b === 'RED') {
-    style = 'bg-red-950/60 text-red-400 border-red-800';
+    style = 'bg-rose-50 text-rose-700 border-rose-200';
   } else if (b === 'AMBER') {
-    style = 'bg-amber-950/60 text-amber-400 border-amber-800';
+    style = 'bg-amber-50 text-amber-800 border-amber-200';
   }
 
   return (
@@ -177,14 +181,14 @@ export function RiskBandChip({
         className,
       )}
     >
-      <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+      <span className="w-2 h-2 rounded-full bg-current" />
       {b} {score !== undefined && score !== null ? `(${Math.round(score)})` : ''}
     </span>
   );
 }
 
 // ---------------------------------------------------------------------------
-// MoneyText (INR Formatting en-IN ₹)
+// MoneyText (INR Formatting en-IN)
 // ---------------------------------------------------------------------------
 export function MoneyText({
   amount,
@@ -196,7 +200,7 @@ export function MoneyText({
   className?: string;
 }) {
   const val = amount !== undefined ? amount : amountInr;
-  if (val === null || val === undefined) return <span className="font-mono text-slate-500">—</span>;
+  if (val === null || val === undefined) return <span className="font-mono text-slate-400">—</span>;
 
   const formatted = new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -204,7 +208,7 @@ export function MoneyText({
     maximumFractionDigits: 0,
   }).format(val);
 
-  return <span className={cn('font-mono font-medium text-slate-100', className)}>{formatted}</span>;
+  return <span className={cn('font-mono font-semibold text-slate-900', className)}>{formatted}</span>;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,10 +226,10 @@ export function TimeText({
   className?: string;
 }) {
   const targetDate = date !== undefined ? date : iso;
-  if (!targetDate) return <span className="font-mono text-slate-500">—</span>;
+  if (!targetDate) return <span className="font-mono text-slate-400">—</span>;
 
   const d = new Date(targetDate);
-  if (isNaN(d.getTime())) return <span className="font-mono text-slate-500">Invalid</span>;
+  if (isNaN(d.getTime())) return <span className="font-mono text-slate-400">Invalid</span>;
 
   const options: Intl.DateTimeFormatOptions = {
     timeZone: 'Asia/Kolkata',
@@ -251,7 +255,7 @@ export function TimeText({
   const str = new Intl.DateTimeFormat('en-IN', options).format(d);
 
   return (
-    <span className={cn('font-mono text-xs text-slate-300', className)} title={`${d.toISOString()} (UTC)`}>
+    <span className={cn('font-mono text-xs text-slate-600', className)} title={`${d.toISOString()} (UTC)`}>
       {str} IST
     </span>
   );
@@ -276,22 +280,24 @@ export function KpiCard({
   active?: boolean;
 }) {
   const statusColors = {
-    default: 'text-slate-100',
-    danger: 'text-red-400',
-    warning: 'text-amber-400',
-    success: 'text-emerald-400',
+    default: 'text-slate-900',
+    danger: 'text-rose-600',
+    warning: 'text-amber-600',
+    success: 'text-emerald-600',
   };
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        'p-4 rounded-lg bg-slate-900 border transition-all select-none',
-        onClick ? 'cursor-pointer hover:border-slate-600' : '',
-        active ? 'border-indigo-500 ring-1 ring-indigo-500 bg-slate-800/80' : 'border-slate-800',
+        'p-4 rounded-lg bg-white border transition-all select-none shadow-xs',
+        onClick ? 'cursor-pointer hover:border-slate-300 hover:shadow-sm' : '',
+        active
+          ? 'border-indigo-600 ring-2 ring-indigo-500/10 bg-indigo-50/20'
+          : 'border-slate-200',
       )}
     >
-      <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</div>
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</div>
       <div className={cn('text-2xl font-mono font-bold mt-1.5', statusColors[status])}>
         {value}
       </div>
@@ -316,10 +322,10 @@ export function ProofChip({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-semibold border',
+        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-mono font-semibold border',
         allPass
-          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-          : 'bg-amber-950/60 text-amber-400 border-amber-800',
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          : 'bg-amber-50 text-amber-800 border-amber-200',
         className,
       )}
     >
@@ -333,7 +339,7 @@ export function ProofChip({
 // Skeleton
 // ---------------------------------------------------------------------------
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse rounded bg-slate-800/80', className)} />;
+  return <div className={cn('animate-pulse rounded bg-slate-200/80', className)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -349,11 +355,11 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-slate-800 rounded-lg">
-      <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-slate-500 mb-3">
+    <div className="flex flex-col items-center justify-center p-8 text-center border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
         <HelpCircle className="w-5 h-5" />
       </div>
-      <h3 className="text-sm font-semibold text-slate-300">{title}</h3>
+      <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
       {description && <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">{description}</p>}
       {action}
     </div>
@@ -371,13 +377,13 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="p-4 rounded-lg bg-red-950/40 border border-red-900/60 text-red-200 text-sm flex items-center justify-between gap-4">
+    <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5">
-        <XCircle className="w-5 h-5 text-red-400 shrink-0" />
-        <span>{message || 'An error occurred while loading data.'}</span>
+        <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+        <span className="font-medium">{message || 'An error occurred while loading data.'}</span>
       </div>
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry} className="border-red-800 text-red-200 hover:bg-red-950">
+        <Button variant="outline" size="sm" onClick={onRetry} className="border-rose-300 text-rose-700 hover:bg-rose-100">
           Retry
         </Button>
       )}
@@ -402,11 +408,11 @@ export function Dialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-lg shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-          <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -438,16 +444,16 @@ export function Drawer({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs">
       <div
         className={cn(
-          'w-full h-full bg-slate-900 border-l border-slate-800 shadow-2xl flex flex-col',
+          'w-full h-full bg-white border-l border-slate-200 shadow-2xl flex flex-col text-slate-900',
           width,
         )}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-          <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

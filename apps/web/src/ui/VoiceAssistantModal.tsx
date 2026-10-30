@@ -148,19 +148,19 @@ export function VoiceAssistantModal({
     >
       <div className="space-y-4 text-xs">
         {/* Language selector */}
-        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950 border border-slate-800">
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200">
           <div className="flex items-center gap-2">
-            <Languages className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-300 font-medium">Recognition Language:</span>
+            <Languages className="w-4 h-4 text-indigo-600" />
+            <span className="text-slate-700 font-medium">Recognition Language:</span>
           </div>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setLanguage('en-IN')}
-              className={`px-2.5 py-1 rounded text-xs font-semibold ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors ${
                 language === 'en-IN'
-                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                  : 'bg-slate-900 text-slate-400'
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-300 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
               English (India)
@@ -168,10 +168,10 @@ export function VoiceAssistantModal({
             <button
               type="button"
               onClick={() => setLanguage('ta-IN')}
-              className={`px-2.5 py-1 rounded text-xs font-semibold ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold border transition-colors ${
                 language === 'ta-IN'
-                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                  : 'bg-slate-900 text-slate-400'
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-300 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
               தமிழ் (Tamil)
@@ -180,21 +180,21 @@ export function VoiceAssistantModal({
         </div>
 
         {/* Mic Activation Button & Animation */}
-        <div className="p-6 rounded-lg bg-slate-950 border border-slate-800 text-center space-y-3">
+        <div className="p-6 rounded-lg bg-slate-50/70 border border-slate-200 text-center space-y-3">
           <button
             type="button"
             onClick={toggleListening}
             className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center transition-all ${
               isListening
-                ? 'bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-900/50 scale-105'
-                : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                ? 'bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-200 scale-105'
+                : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 shadow-xs'
             }`}
           >
-            {isListening ? <Mic className="w-8 h-8" /> : <MicOff className="w-7 h-7 text-slate-400" />}
+            {isListening ? <Mic className="w-8 h-8" /> : <MicOff className="w-7 h-7 text-slate-500" />}
           </button>
 
           <div>
-            <span className="font-semibold text-white block">
+            <span className="font-semibold text-slate-900 block">
               {isListening ? 'Listening via browser microphone...' : 'Click microphone to record field report'}
             </span>
             <span className="text-[11px] text-slate-500">
@@ -205,23 +205,23 @@ export function VoiceAssistantModal({
           {/* Audio Waveform simulation */}
           {isListening && (
             <div className="flex items-center justify-center gap-1 pt-1">
-              <span className="w-1 h-3 bg-cyan-400 animate-pulse" />
-              <span className="w-1 h-6 bg-cyan-400 animate-pulse delay-75" />
-              <span className="w-1 h-8 bg-cyan-400 animate-pulse delay-150" />
-              <span className="w-1 h-4 bg-cyan-400 animate-pulse delay-100" />
-              <span className="w-1 h-7 bg-cyan-400 animate-pulse delay-200" />
+              <span className="w-1 h-3 bg-indigo-600 animate-pulse rounded-full" />
+              <span className="w-1 h-6 bg-indigo-600 animate-pulse delay-75 rounded-full" />
+              <span className="w-1 h-8 bg-indigo-600 animate-pulse delay-150 rounded-full" />
+              <span className="w-1 h-4 bg-indigo-600 animate-pulse delay-100 rounded-full" />
+              <span className="w-1 h-7 bg-indigo-600 animate-pulse delay-200 rounded-full" />
             </div>
           )}
         </div>
 
         {/* Live Transcription Box */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-slate-400">
+          <div className="flex items-center justify-between text-slate-600">
             <span className="font-semibold text-[11px] uppercase tracking-wider">
               Live Transcribed Speech:
             </span>
             {transcript && (
-              <span className="text-cyan-400 font-mono text-[10px] flex items-center gap-1">
+              <span className="text-indigo-600 font-mono text-[10px] flex items-center gap-1">
                 <Volume2 className="w-3 h-3" />
                 Confidence: 96%
               </span>
@@ -231,13 +231,13 @@ export function VoiceAssistantModal({
             rows={3}
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
-            className="w-full p-2.5 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-cyan-500 font-sans"
+            className="w-full p-2.5 rounded bg-white border border-slate-300 text-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-sans"
           />
         </div>
 
         {feedback && (
-          <div className="p-2.5 rounded bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{feedback}</span>
           </div>
         )}

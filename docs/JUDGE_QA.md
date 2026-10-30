@@ -71,3 +71,4 @@ DisruptionIQ maintains an immutable **SHA-256 Merkle-style audit chain**:
 - Each audit record incorporates the cryptographic hash of the preceding record: `hash = SHA256(prev_hash + actor + action + payload + timestamp)`.
 - The `GET /audit/verify` endpoint walks the entire chain from genesis to head.
 - In our live demo, judges can click **Tamper One Row** (simulating an insider database injection); running **Verify Chain** instantly catches the corruption, pinpoints the exact damaged record ID, and provides a **Restore** capability.
+

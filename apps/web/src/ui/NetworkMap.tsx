@@ -1,7 +1,7 @@
 /**
  * apps/web/src/ui/NetworkMap.tsx
  *
- * B2 Network Map: Plain SVG logistics network map (0..1000 coordinate space).
+ * B2 Network Map: Plain SVG logistics network map (Bright Executive Theme).
  * Renders warehouses, suppliers, and transfer lanes with live highlighting of
  * disrupted shipments and destination hubs.
  * Clicking a node opens an inspection drawer listing orders behind it.
@@ -67,29 +67,29 @@ export function NetworkMap() {
   };
 
   return (
-    <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
         <div>
-          <h3 className="text-sm font-semibold text-slate-200">Logistics Network Map (B2)</h3>
-          <p className="text-[11px] text-slate-400">
+          <h3 className="text-sm font-semibold text-slate-900">Logistics Network Map (B2)</h3>
+          <p className="text-[11px] text-slate-500">
             Interactive plain SVG topology. Click any node to inspect inventory buffers and dependent orders.
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs font-mono">
-          <span className="flex items-center gap-1.5 text-slate-300">
-            <span className="w-2.5 h-2.5 rounded bg-indigo-500 inline-block" /> Hub
+          <span className="flex items-center gap-1.5 text-slate-700">
+            <span className="w-2.5 h-2.5 rounded bg-indigo-600 inline-block" /> Hub
           </span>
-          <span className="flex items-center gap-1.5 text-slate-300">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Supplier
+          <span className="flex items-center gap-1.5 text-slate-700">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Supplier
           </span>
-          <span className="flex items-center gap-1.5 text-red-400 font-semibold">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping inline-block" /> Disrupted
+          <span className="flex items-center gap-1.5 text-rose-700 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping inline-block" /> Disrupted
           </span>
         </div>
       </div>
 
       {/* SVG Canvas (viewBox 0 0 800 1000) */}
-      <div className="relative w-full h-[420px] bg-slate-950 rounded-lg border border-slate-800 overflow-hidden flex items-center justify-center">
+      <div className="relative w-full h-[420px] bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center">
         <svg viewBox="100 200 600 700" className="w-full h-full">
           {/* Transfer Lanes */}
           {SEEDED_LANES.map((lane, i) => (
@@ -99,7 +99,7 @@ export function NetworkMap() {
                 y1={lane.fromY}
                 x2={lane.toX}
                 y2={lane.toY}
-                stroke="#334155"
+                stroke="#cbd5e1"
                 strokeWidth={lane.distance_km < 100 ? 3 : 1.5}
                 strokeDasharray={lane.distance_km > 300 ? '4 4' : 'none'}
               />
@@ -133,7 +133,7 @@ export function NetworkMap() {
                     cy={node.y}
                     r="22"
                     fill="none"
-                    stroke="#ef4444"
+                    stroke="#f43f5e"
                     strokeWidth="2"
                     opacity="0.6"
                     className="animate-ping"
@@ -146,9 +146,10 @@ export function NetworkMap() {
                     cx={node.x}
                     cy={node.y}
                     r="14"
-                    fill={isDisrupted ? '#ef4444' : '#f59e0b'}
-                    stroke="#0f172a"
+                    fill={isDisrupted ? '#f43f5e' : '#f59e0b'}
+                    stroke="#ffffff"
                     strokeWidth="3"
+                    filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))"
                   />
                 ) : (
                   <rect
@@ -156,10 +157,11 @@ export function NetworkMap() {
                     y={node.y - 14}
                     width="28"
                     height="28"
-                    rx="4"
-                    fill={isDisrupted ? '#ef4444' : '#6366f1'}
-                    stroke="#0f172a"
+                    rx="6"
+                    fill={isDisrupted ? '#f43f5e' : '#4f46e5'}
+                    stroke="#ffffff"
                     strokeWidth="3"
+                    filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))"
                   />
                 )}
 
@@ -168,7 +170,7 @@ export function NetworkMap() {
                   x={node.x}
                   y={node.y + 24}
                   textAnchor="middle"
-                  fill="#f8fafc"
+                  fill="#0f172a"
                   fontSize="11"
                   fontWeight="bold"
                   fontFamily="monospace"
@@ -179,7 +181,7 @@ export function NetworkMap() {
                   x={node.x}
                   y={node.y + 36}
                   textAnchor="middle"
-                  fill="#94a3b8"
+                  fill="#64748b"
                   fontSize="9"
                 >
                   {node.name.slice(0, 15)}
@@ -197,34 +199,34 @@ export function NetworkMap() {
         title={`Node Inspection: ${selectedNode?.code} — ${selectedNode?.name}`}
         width="max-w-lg"
       >
-        <div className="space-y-4 text-xs">
-          <div className="p-3 rounded bg-slate-950 border border-slate-800 space-y-2">
+        <div className="space-y-4 text-xs text-slate-700">
+          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-200">Facility Type</span>
-              <span className="font-mono text-slate-400">{selectedNode?.type}</span>
+              <span className="font-semibold text-slate-800">Facility Type</span>
+              <span className="font-mono text-slate-600">{selectedNode?.type}</span>
             </div>
             {selectedNode?.highlighted && (
-              <div className="text-red-400 font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <div className="text-rose-700 font-semibold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                 Active Disruption Impact: Downstream orders delayed
               </div>
             )}
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
               Orders Dependent on this Facility ({SCENARIO_A_ORDERS_HOSUR.length})
             </h4>
 
             <div className="space-y-2">
               {SCENARIO_A_ORDERS_HOSUR.map((o) => (
-                <div key={o.code} className="p-3 rounded bg-slate-950 border border-slate-800 space-y-1">
+                <div key={o.code} className="p-3.5 rounded-lg bg-white border border-slate-200 shadow-xs space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-slate-100">{o.code}</span>
+                    <span className="font-mono font-bold text-slate-900">{o.code}</span>
                     <RiskBandChip score={o.risk} />
                   </div>
-                  <div className="text-slate-300">{o.customer}</div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                  <div className="text-slate-700 font-medium">{o.customer}</div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
                     <span>Units: {o.units}</span>
                     <span>Hourly Penalty: <MoneyText amount={o.penalty} /></span>
                   </div>

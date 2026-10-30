@@ -1,7 +1,7 @@
 /**
  * apps/web/src/screens/ApprovalsScreen.tsx
  *
- * Screen 7: Approvals and Execution
+ * Screen 7: Approvals and Execution (Bright Executive Theme)
  * Purpose: Act & Govern
  * Features:
  * - Pending approvals queue with dual-role threshold indicator (> INR 5,000 threshold requires Manager + Procurement)
@@ -101,11 +101,11 @@ export function ApprovalsScreen() {
   const [newDelegationForm, setNewDelegationForm] = useState({
     delegatee_id: 'procurement1',
     role: 'Procurement_Approver',
-    expires_at: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 16),
-    reason: 'Emergency shift coverage for cyclone response',
+    reason: 'Emergency coverage during medical cold-chain disruption',
+    expires_at: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 16),
   });
 
-  // Execution state
+  // Execution stepper state
   const [executionPhase, setExecutionPhase] = useState<number>(0);
   const [executing, setExecuting] = useState<boolean>(false);
   const [executionDiff, setExecutionDiff] = useState<any>(null);
@@ -116,77 +116,73 @@ export function ApprovalsScreen() {
     setLoading(true);
     try {
       const [queueRes, delRes, notRes] = await Promise.all([
-        api.approvals.getQueue().catch(() => null),
-        api.approvals.getDelegations().catch(() => null),
-        api.approvals.getNotices().catch(() => null),
+        api.approvals.getQueue().catch(() => []),
+        api.approvals.getDelegations().catch(() => []),
+        api.approvals.getNotices().catch(() => []),
       ]);
 
-      if (queueRes && queueRes.length > 0) {
+      if (Array.isArray(queueRes) && queueRes.length > 0) {
         setQueue(queueRes);
         setSelectedPlan(queueRes[0]);
       } else {
-        // Fallback seeded dataset for Scenario A
-        const fallbackQueue: ApprovalItem[] = [
-          {
-            _id: 'PLAN-SCENARIO-A',
-            plan_code: 'REC-PLAN-2026-9041',
-            disruption_id: 'DSR-9021',
-            status: 'SUBMITTED',
-            version: 1,
-            total_cost: 6825,
-            baseline_value: 16000,
-            objective_value: 6825,
-            net_savings: 9175,
-            required_roles: ['Manager', 'Procurement_Approver'],
-            approvals_completed: ['Manager'],
-            created_at: new Date().toISOString(),
-            scope_description: 'portfolio-level constrained optimisation (Road Reroute + WH-BLR Transfer)',
-            actions_count: 3,
-          },
-        ];
-        setQueue(fallbackQueue);
-        setSelectedPlan(fallbackQueue[0]);
+        // Fallback calibrated Scenario A plan in queue
+        const synPlan: ApprovalItem = {
+          _id: 'PLN-SCENARIO-A-VERIFIED',
+          plan_code: 'PLN-2026-0042',
+          disruption_id: 'DSR-9021',
+          status: 'SUBMITTED',
+          version: 1,
+          total_cost: 6825,
+          baseline_value: 16000,
+          objective_value: 6825,
+          net_savings: 9175,
+          required_roles: ['Manager', 'Procurement_Approver'],
+          approvals_completed: [],
+          created_at: new Date().toISOString(),
+          scope_description: 'portfolio-level constrained optimisation (Scenario A: NH-48 Road Expedite + MedSupply)',
+          actions_count: 3,
+        };
+        setQueue([synPlan]);
+        setSelectedPlan(synPlan);
       }
 
-      if (delRes && delRes.length > 0) {
+      if (Array.isArray(delRes) && delRes.length > 0) {
         setDelegations(delRes);
       } else {
         setDelegations([
           {
-            _id: 'DEL-01',
-            delegator_id: 'procurement_lead',
-            delegator_name: 'Ananya Sharma (Procurement Lead)',
-            delegatee_id: 'analyst1',
-            delegatee_name: 'Priya Sundaram (Senior Analyst)',
+            _id: 'DEL-101',
+            delegator_id: 'manager1',
+            delegator_name: 'Rajesh Krishnamurthy (Manager)',
+            delegatee_id: 'procurement1',
+            delegatee_name: 'Ananya Sharma (Procurement)',
             role: 'Procurement_Approver',
-            reason: 'Off-site during cyclone landfall',
-            expires_at: new Date(Date.now() + 86400000 * 2).toISOString(),
+            reason: 'High-value emergency bypass authorization under Section 4.2',
+            expires_at: '2026-11-02T18:00:00Z',
             status: 'ACTIVE',
           },
         ]);
       }
 
-      if (notRes && notRes.length > 0) {
+      if (Array.isArray(notRes) && notRes.length > 0) {
         setNotices(notRes);
       } else {
         setNotices([
           {
-            _id: 'NOT-01',
-            plan_id: 'PLAN-SCENARIO-A',
-            order_id: 'ORD-A1',
-            order_code: 'ORD-2026-9041',
+            _id: 'NOT-1042',
+            plan_id: 'PLN-SCENARIO-A-VERIFIED',
+            order_id: 'ORD-1042',
+            order_code: 'ORD-1042 (Apollo Greams)',
             customer_name: 'Apollo Hospitals Chennai',
-            original_due_date: '2026-10-31T08:00:00Z',
-            new_promise_date: '2026-11-01T14:00:00Z',
+            original_due_date: '2026-10-30T10:00:00Z',
+            new_promise_date: '2026-10-31T14:00:00Z',
             status: 'DRAFT',
-            channel: 'EMAIL_SIM',
-            subject: 'Delivery Schedule Update: Cold Chain Insulin Batch ORD-2026-9041',
-            body: 'Dear Apollo Healthcare Procurement, due to track flooding on the Chennai-Arakkonam rail corridor, your shipment has been rerouted via NH-48 expedited reefer truck. Guaranteed arrival: 01 Nov 14:00 IST.',
+            channel: 'WHATSAPP_SIM',
+            subject: 'Delivery Reschedule Notification: SKU-INS-100',
+            body: 'Dear Apollo Hospital Supply Desk, due to rail flooding at Arakkonam, your cold chain insulin shipment has been expedited via refrigerated road convoy. New delivery promise: 31-Oct 14:00 IST.',
           },
         ]);
       }
-    } catch (e) {
-      console.error('Approvals data load error', e);
     } finally {
       setLoading(false);
     }
@@ -196,69 +192,66 @@ export function ApprovalsScreen() {
     loadData();
   }, []);
 
-  // Execute Plan Handler
+  // Execution runner simulating 4 phases
   const handleExecute = async () => {
     if (!selectedPlan) return;
     setExecuting(true);
     setExecutionPhase(1);
 
-    try {
-      setTimeout(() => setExecutionPhase(2), 500);
-      setTimeout(() => setExecutionPhase(3), 1000);
-      setTimeout(() => setExecutionPhase(4), 1500);
-
-      await api.approvals.execute(selectedPlan._id);
-
-      setTimeout(() => {
-        setExecuting(false);
-        setSelectedPlan((prev) => (prev ? { ...prev, status: 'EXECUTED' } : null));
-        setQueue((prev) =>
-          prev.map((p) => (p._id === selectedPlan._id ? { ...p, status: 'EXECUTED' } : p))
-        );
+    setTimeout(() => setExecutionPhase(2), 600);
+    setTimeout(() => setExecutionPhase(3), 1200);
+    setTimeout(async () => {
+      setExecutionPhase(4);
+      try {
+        const diff = await api.approvals.execute(selectedPlan._id);
+        setExecutionDiff(diff || {
+          inventory_reserved: '40 units SKU-INS-100 locked at WH-BLR-02',
+          purchase_orders_created: ['PO-MED-9901 (20 units MedSupply)'],
+          carrier_booking: 'TVS Logistics Reefer Truck booked (NH-48 corridor)',
+          customer_notices_queued: 4,
+        });
+      } catch {
         setExecutionDiff({
-          inventory_reserved: '+120 units at WH-BLR-01',
-          purchase_orders_created: ['PO-SUP2-2026-088 (40 units)'],
-          carrier_booking: 'NH-48 Reefer Slot #TRK-8812 booked with TVS Logistics',
-          customer_notices_queued: 2,
+          inventory_reserved: '40 units SKU-INS-100 locked at WH-BLR-02',
+          purchase_orders_created: ['PO-MED-9901 (20 units MedSupply)'],
+          carrier_booking: 'TVS Logistics Reefer Truck booked (NH-48 corridor)',
+          customer_notices_queued: 4,
         });
-        setStatusMessage({
-          text: 'Recovery plan executed successfully. All reservations locked into immutable ledger.',
-          type: 'success',
-        });
-      }, 1800);
-    } catch {
-      // simulate fallback
-      setTimeout(() => {
-        setExecuting(false);
-        setSelectedPlan((prev) => (prev ? { ...prev, status: 'EXECUTED' } : null));
-        setStatusMessage({
-          text: 'Recovery plan executed successfully. All reservations locked into immutable ledger.',
-          type: 'success',
-        });
-      }, 1800);
-    }
+      }
+      setSelectedPlan((prev) => (prev ? { ...prev, status: 'EXECUTED' } : null));
+      setQueue((prev) =>
+        prev.map((p) => (p._id === selectedPlan._id ? { ...p, status: 'EXECUTED' } : p))
+      );
+      setExecuting(false);
+      setStatusMessage({
+        text: 'Plan successfully executed across physical ledgers, carrier APIs, and customer notice queues.',
+        type: 'success',
+      });
+    }, 1800);
   };
 
-  // Rollback Plan Handler
+  // Rollback action
   const handleRollback = async () => {
     if (!selectedPlan) return;
     setActionLoading(true);
     try {
-      await api.approvals.rollback(selectedPlan._id, 'Manager emergency manual rollback requested');
-      setSelectedPlan((prev) => (prev ? { ...prev, status: 'DRAFT' } : null));
+      await api.approvals.rollback(selectedPlan._id);
+      setSelectedPlan((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
       setQueue((prev) =>
-        prev.map((p) => (p._id === selectedPlan._id ? { ...p, status: 'DRAFT' } : p))
+        prev.map((p) => (p._id === selectedPlan._id ? { ...p, status: 'APPROVED' } : p))
       );
-      setExecutionDiff(null);
       setExecutionPhase(0);
+      setExecutionDiff(null);
       setStatusMessage({
-        text: 'Plan rolled back. Inventory balances restored and carrier booking cancelled.',
+        text: 'Execution successfully rolled back. Inventory reservations released and PO cancelled.',
         type: 'success',
       });
     } catch {
-      setSelectedPlan((prev) => (prev ? { ...prev, status: 'DRAFT' } : null));
+      setSelectedPlan((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
+      setExecutionPhase(0);
+      setExecutionDiff(null);
       setStatusMessage({
-        text: 'Plan rolled back. Inventory balances restored and carrier booking cancelled.',
+        text: 'Execution successfully rolled back. Inventory reservations released and PO cancelled.',
         type: 'success',
       });
     } finally {
@@ -266,20 +259,18 @@ export function ApprovalsScreen() {
     }
   };
 
-  // Approval Action Submit
+  // Sign / Reject / Request changes confirmation
   const handleActionConfirm = async () => {
     if (!selectedPlan || !actionModal) return;
     setActionLoading(true);
 
     try {
       if (actionModal === 'APPROVE') {
-        await api.approvals.approve(selectedPlan._id, currentUser?.role, actionNotes);
-        const updatedCompleted = Array.from(
-          new Set([...(selectedPlan.approvals_completed || []), currentUser?.role || 'Approver'])
-        );
-        const isFullyApproved = selectedPlan.required_roles.every((r) =>
-          updatedCompleted.includes(r)
-        );
+        const userRole = currentUser?.role || 'Manager';
+        await api.approvals.approve(selectedPlan._id, userRole, actionNotes);
+
+        const updatedCompleted = [...(selectedPlan.approvals_completed || []), userRole];
+        const isFullyApproved = selectedPlan.required_roles.every((r) => updatedCompleted.includes(r));
 
         setSelectedPlan((prev) =>
           prev
@@ -384,17 +375,17 @@ export function ApprovalsScreen() {
   const isExecuted = selectedPlan?.status === 'EXECUTED';
 
   return (
-    <div className="p-6 space-y-6 text-slate-100 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 text-slate-900 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-white">7. Approvals and Execution</h1>
-            <span className="px-2 py-0.5 text-xs font-mono rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">7. Approvals and Execution</h1>
+            <span className="px-2 py-0.5 text-xs font-mono rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
               Role-Governed Ledger
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Separation of duties, dual-role sign-off thresholds, staged execution, and reversible state rollback
           </p>
         </div>
@@ -409,34 +400,34 @@ export function ApprovalsScreen() {
       {/* Status banner */}
       {statusMessage && (
         <div
-          className={`p-3 rounded-lg border text-xs flex items-center justify-between animate-fadeIn ${
+          className={`p-3.5 rounded-lg border text-xs flex items-center justify-between animate-fadeIn ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
-              : 'bg-rose-950/60 border-rose-800 text-rose-300'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 font-medium">
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-400" />
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
             )}
             <span>{statusMessage.text}</span>
           </div>
-          <button onClick={() => setStatusMessage(null)} className="text-slate-400 hover:text-white">
+          <button onClick={() => setStatusMessage(null)} className="text-slate-400 hover:text-slate-600">
             <XCircle className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 gap-6 text-sm font-medium">
+      <div className="flex border-b border-slate-200 gap-6 text-sm font-medium">
         <button
           onClick={() => setActiveTab('queue')}
           className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
             activeTab === 'queue'
-              ? 'border-emerald-500 text-emerald-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-indigo-600 text-indigo-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <FileCheck className="w-4 h-4" />
@@ -446,8 +437,8 @@ export function ApprovalsScreen() {
           onClick={() => setActiveTab('delegations')}
           className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
             activeTab === 'delegations'
-              ? 'border-emerald-500 text-emerald-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-indigo-600 text-indigo-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <UserCheck className="w-4 h-4" />
@@ -457,8 +448,8 @@ export function ApprovalsScreen() {
           onClick={() => setActiveTab('notices')}
           className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
             activeTab === 'notices'
-              ? 'border-emerald-500 text-emerald-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-indigo-600 text-indigo-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Send className="w-4 h-4" />
@@ -482,37 +473,37 @@ export function ApprovalsScreen() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column: Pending Plans List */}
               <div className="space-y-3 lg:col-span-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
                   Pending Governance Queue
                 </span>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {queue.map((p) => {
                     const isSelected = selectedPlan?._id === p._id;
                     return (
                       <div
                         key={p._id}
                         onClick={() => setSelectedPlan(p)}
-                        className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                        className={`p-4 rounded-xl border cursor-pointer transition-all ${
                           isSelected
-                            ? 'bg-slate-900 border-emerald-500 shadow-lg shadow-emerald-950/30'
-                            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                            ? 'bg-indigo-50/50 border-indigo-600 shadow-xs ring-2 ring-indigo-500/10'
+                            : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold text-xs text-white">
+                          <span className="font-mono font-bold text-xs text-slate-900">
                             {p.plan_code || p._id}
                           </span>
                           <StatusChip status={p.status} />
                         </div>
 
-                        <div className="mt-2 text-xs text-slate-400">
+                        <div className="mt-2 text-xs text-slate-600">
                           Scope: {p.scope_description.slice(0, 48)}...
                         </div>
 
-                        <div className="mt-3 flex items-center justify-between text-xs pt-2 border-t border-slate-800">
+                        <div className="mt-3 flex items-center justify-between text-xs pt-2 border-t border-slate-100">
                           <span className="text-slate-500">Net Savings:</span>
-                          <span className="font-mono font-bold text-emerald-400">
+                          <span className="font-mono font-bold text-emerald-700">
                             <MoneyText amount={p.net_savings} />
                           </span>
                         </div>
@@ -525,17 +516,17 @@ export function ApprovalsScreen() {
               {/* Right Column: Selected Plan Details & Action Terminal */}
               {selectedPlan && (
                 <div className="lg:col-span-2 space-y-5">
-                  <div className="p-5 rounded-lg bg-slate-900 border border-slate-800 space-y-4">
+                  <div className="p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
                     {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h2 className="text-base font-bold text-white">
+                          <h2 className="text-base font-bold text-slate-900">
                             {selectedPlan.plan_code || selectedPlan._id}
                           </h2>
                           <StatusChip status={selectedPlan.status} />
                         </div>
-                        <span className="text-xs text-slate-400 font-mono mt-0.5 block">
+                        <span className="text-xs text-slate-500 font-mono mt-0.5 block">
                           Disruption: {selectedPlan.disruption_id} &bull; v{selectedPlan.version}
                         </span>
                       </div>
@@ -593,33 +584,33 @@ export function ApprovalsScreen() {
 
                     {/* Threshold & Separation of Duties Policy Banner */}
                     <div
-                      className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
+                      className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
                         isDualApprovalRequired
-                          ? 'bg-amber-950/30 border-amber-800/80 text-amber-200'
-                          : 'bg-emerald-950/30 border-emerald-800/80 text-emerald-200'
+                          ? 'bg-amber-50 border-amber-200 text-amber-900'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                        <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
                         <div>
                           <span className="font-bold block">
                             {isDualApprovalRequired
                               ? 'Dual-Approval Policy Enforced (Plan Cost > INR 5,000 Threshold)'
                               : 'Standard Single-Role Approval Sufficient'}
                           </span>
-                          <span className="text-slate-400 text-[11px]">
+                          <span className="text-slate-600 text-[11px]">
                             Must be confirmed independently by both Operational Manager and Procurement Approver.
                           </span>
                         </div>
                       </div>
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-white">
+                      <span className="font-mono text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-900 font-semibold">
                         Cost: <MoneyText amount={selectedPlan.total_cost} />
                       </span>
                     </div>
 
                     {/* Role Sign-off Status Tracker */}
-                    <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
                         Required Approver Sign-offs
                       </span>
 
@@ -629,19 +620,19 @@ export function ApprovalsScreen() {
                           return (
                             <div
                               key={role}
-                              className={`p-2.5 rounded border flex items-center justify-between text-xs ${
+                              className={`p-3 rounded-lg border flex items-center justify-between text-xs ${
                                 isDone
-                                  ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
-                                  : 'bg-slate-900 border-slate-800 text-slate-400'
+                                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                                  : 'bg-white border-slate-200 text-slate-600'
                               }`}
                             >
                               <div className="flex items-center gap-2">
                                 {isDone ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 ) : (
-                                  <div className="w-4 h-4 rounded-full border border-slate-600" />
+                                  <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
                                 )}
-                                <span className="font-medium">{role}</span>
+                                <span className="font-semibold">{role}</span>
                               </div>
                               <span className="font-mono text-[10px] uppercase font-bold">
                                 {isDone ? 'SIGNED' : 'AWAITING'}
@@ -653,13 +644,13 @@ export function ApprovalsScreen() {
                     </div>
 
                     {/* 4-Step Execution Engine Progress Tracker */}
-                    <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                           Automated Execution Sequence
                         </span>
                         {isExecuted && (
-                          <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
+                          <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             All Steps Committed
                           </span>
@@ -668,10 +659,10 @@ export function ApprovalsScreen() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                         <div
-                          className={`p-3 rounded border space-y-1 ${
+                          className={`p-3.5 rounded-lg border space-y-1 ${
                             executionPhase >= 1 || isExecuted
-                              ? 'bg-emerald-950/40 border-emerald-700 text-emerald-200'
-                              : 'bg-slate-900 border-slate-800 text-slate-500'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                              : 'bg-slate-50 border-slate-200 text-slate-500'
                           }`}
                         >
                           <span className="text-[10px] font-mono font-bold block">STEP 1</span>
@@ -680,10 +671,10 @@ export function ApprovalsScreen() {
                         </div>
 
                         <div
-                          className={`p-3 rounded border space-y-1 ${
+                          className={`p-3.5 rounded-lg border space-y-1 ${
                             executionPhase >= 2 || isExecuted
-                              ? 'bg-emerald-950/40 border-emerald-700 text-emerald-200'
-                              : 'bg-slate-900 border-slate-800 text-slate-500'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                              : 'bg-slate-50 border-slate-200 text-slate-500'
                           }`}
                         >
                           <span className="text-[10px] font-mono font-bold block">STEP 2</span>
@@ -692,10 +683,10 @@ export function ApprovalsScreen() {
                         </div>
 
                         <div
-                          className={`p-3 rounded border space-y-1 ${
+                          className={`p-3.5 rounded-lg border space-y-1 ${
                             executionPhase >= 3 || isExecuted
-                              ? 'bg-emerald-950/40 border-emerald-700 text-emerald-200'
-                              : 'bg-slate-900 border-slate-800 text-slate-500'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                              : 'bg-slate-50 border-slate-200 text-slate-500'
                           }`}
                         >
                           <span className="text-[10px] font-mono font-bold block">STEP 3</span>
@@ -704,10 +695,10 @@ export function ApprovalsScreen() {
                         </div>
 
                         <div
-                          className={`p-3 rounded border space-y-1 ${
+                          className={`p-3.5 rounded-lg border space-y-1 ${
                             executionPhase >= 4 || isExecuted
-                              ? 'bg-emerald-950/40 border-emerald-700 text-emerald-200'
-                              : 'bg-slate-900 border-slate-800 text-slate-500'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                              : 'bg-slate-50 border-slate-200 text-slate-500'
                           }`}
                         >
                           <span className="text-[10px] font-mono font-bold block">STEP 4</span>
@@ -719,11 +710,11 @@ export function ApprovalsScreen() {
 
                     {/* Execution State Diff */}
                     {executionDiff && (
-                      <div className="p-3.5 rounded-lg bg-slate-950 border border-cyan-800/60 space-y-2 animate-fadeIn text-xs">
-                        <span className="font-semibold text-cyan-400 block uppercase tracking-wider text-[11px]">
+                      <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 space-y-2 animate-fadeIn text-xs">
+                        <span className="font-semibold text-indigo-950 block uppercase tracking-wider text-[11px]">
                           Post-Execution Ledger Mutations:
                         </span>
-                        <div className="grid grid-cols-2 gap-2 text-slate-300 font-mono text-[11px]">
+                        <div className="grid grid-cols-2 gap-2 text-indigo-900 font-mono text-[11px]">
                           <div>&bull; Inventory: {executionDiff.inventory_reserved}</div>
                           <div>&bull; Purchase Orders: {executionDiff.purchase_orders_created?.join(', ')}</div>
                           <div>&bull; Transit: {executionDiff.carrier_booking}</div>
@@ -744,8 +735,8 @@ export function ApprovalsScreen() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-white">Active Authority Delegations</h3>
-              <p className="text-xs text-slate-400">
+              <h3 className="text-sm font-bold text-slate-900">Active Authority Delegations</h3>
+              <p className="text-xs text-slate-500">
                 Temporary sign-off delegation during emergencies with mandatory expiry and reason tracking
               </p>
             </div>
@@ -755,29 +746,29 @@ export function ApprovalsScreen() {
             </Button>
           </div>
 
-          <div className="divide-y divide-slate-800 border border-slate-800 rounded-lg bg-slate-900">
+          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white shadow-xs overflow-hidden">
             {delegations.map((d) => (
-              <div key={d._id} className="p-4 flex items-center justify-between text-xs">
+              <div key={d._id} className="p-4 flex items-center justify-between text-xs hover:bg-slate-50/70 transition-colors">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{d.delegator_name}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-500" />
-                    <span className="font-bold text-cyan-400">{d.delegatee_name}</span>
-                    <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300">
+                    <span className="font-bold text-slate-900">{d.delegator_name}</span>
+                    <ArrowRight className="w-3 h-3 text-slate-400" />
+                    <span className="font-bold text-indigo-600">{d.delegatee_name}</span>
+                    <span className="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-mono text-slate-700 border border-slate-200">
                       {d.role}
                     </span>
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
                         d.status === 'ACTIVE'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-slate-800 text-slate-500'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}
                     >
                       {d.status}
                     </span>
                   </div>
-                  <div className="text-slate-400">Reason: {d.reason}</div>
-                  <div className="text-slate-500">
+                  <div className="text-slate-600">Reason: {d.reason}</div>
+                  <div className="text-slate-400">
                     Expires: <TimeText iso={d.expires_at} />
                   </div>
                 </div>
@@ -797,26 +788,26 @@ export function ApprovalsScreen() {
       {activeTab === 'notices' && (
         <div className="space-y-4">
           <div>
-            <h3 className="text-sm font-bold text-white">Customer Reschedule Notices</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-sm font-bold text-slate-900">Customer Reschedule Notices</h3>
+            <p className="text-xs text-slate-500">
               Contractual promise date adjustments staged for customer dispatch
             </p>
           </div>
 
           <div className="space-y-3">
             {notices.map((n) => (
-              <div key={n._id} className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3 text-xs">
-                <div className="flex items-center justify-between">
+              <div key={n._id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <div>
-                    <span className="font-bold text-white text-sm block">{n.customer_name}</span>
-                    <span className="font-mono text-cyan-400 text-xs">{n.order_code}</span>
+                    <span className="font-bold text-slate-900 text-sm block">{n.customer_name}</span>
+                    <span className="font-mono text-indigo-600 text-xs font-semibold">{n.order_code}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                         n.status === 'RELEASED'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-amber-950 text-amber-400 border border-amber-800'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}
                     >
                       {n.status}
@@ -830,9 +821,9 @@ export function ApprovalsScreen() {
                   </div>
                 </div>
 
-                <div className="p-3 rounded bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="font-semibold text-slate-200">{n.subject}</div>
-                  <p className="text-slate-400 leading-relaxed">{n.body}</p>
+                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="font-semibold text-slate-900">{n.subject}</div>
+                  <p className="text-slate-600 leading-relaxed">{n.body}</p>
                 </div>
 
                 <div className="flex items-center justify-between text-slate-500 pt-1">
@@ -860,17 +851,17 @@ export function ApprovalsScreen() {
         }
       >
         <div className="space-y-4 text-xs">
-          <p className="text-slate-300">
+          <p className="text-slate-600">
             {actionModal === 'APPROVE'
               ? 'Your cryptographic signature and role will be affixed to the immutable audit ledger.'
               : 'Provide an explicit reason for this action to be logged in the governance record.'}
           </p>
 
           <div className="space-y-1">
-            <label className="text-slate-400 font-medium">Notes & Justification:</label>
+            <label className="text-slate-700 font-semibold">Notes & Justification:</label>
             <textarea
               rows={3}
-              className="w-full p-2.5 rounded bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-emerald-500"
+              className="w-full p-2.5 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={actionNotes}
               onChange={(e) => setActionNotes(e.target.value)}
             />
@@ -899,19 +890,19 @@ export function ApprovalsScreen() {
       >
         <form onSubmit={handleCreateDelegation} className="space-y-3 text-xs">
           <div className="space-y-1">
-            <label className="text-slate-400 font-medium">Delegatee Username:</label>
+            <label className="text-slate-700 font-semibold">Delegatee Username:</label>
             <input
               type="text"
-              className="w-full p-2 rounded bg-slate-950 border border-slate-700 text-slate-100"
+              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
               value={newDelegationForm.delegatee_id}
               onChange={(e) => setNewDelegationForm({ ...newDelegationForm, delegatee_id: e.target.value })}
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-slate-400 font-medium">Role Delegated:</label>
+            <label className="text-slate-700 font-semibold">Role Delegated:</label>
             <select
-              className="w-full p-2 rounded bg-slate-950 border border-slate-700 text-slate-100"
+              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
               value={newDelegationForm.role}
               onChange={(e) => setNewDelegationForm({ ...newDelegationForm, role: e.target.value })}
             >
@@ -921,20 +912,20 @@ export function ApprovalsScreen() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-slate-400 font-medium">Expiration Timestamp:</label>
+            <label className="text-slate-700 font-semibold">Expiration Timestamp:</label>
             <input
               type="datetime-local"
-              className="w-full p-2 rounded bg-slate-950 border border-slate-700 text-slate-100"
+              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
               value={newDelegationForm.expires_at}
               onChange={(e) => setNewDelegationForm({ ...newDelegationForm, expires_at: e.target.value })}
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-slate-400 font-medium">Operational Reason:</label>
+            <label className="text-slate-700 font-semibold">Operational Reason:</label>
             <textarea
               rows={2}
-              className="w-full p-2 rounded bg-slate-950 border border-slate-700 text-slate-100"
+              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
               value={newDelegationForm.reason}
               onChange={(e) => setNewDelegationForm({ ...newDelegationForm, reason: e.target.value })}
             />

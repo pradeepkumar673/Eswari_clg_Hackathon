@@ -1,7 +1,7 @@
 /**
  * apps/web/src/screens/SignInScreen.tsx
  *
- * Screen 1: Sign-in & Demo Role Switcher.
+ * Screen 1: Sign-in & Demo Role Switcher (Bright Executive Theme).
  */
 
 import { useState } from 'react';
@@ -55,20 +55,20 @@ export function SignInScreen({ onLoginSuccess }: { onLoginSuccess: () => void })
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 text-slate-100">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 text-slate-900">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 mb-4">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 mb-4 shadow-xs">
           <ShieldCheck className="w-6 h-6" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">DisruptionIQ Control Tower</h2>
-        <p className="mt-1 text-sm text-slate-400">Verified Recovery Desk for Supply Chain Operations</p>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-900">DisruptionIQ Control Tower</h2>
+        <p className="mt-1 text-sm text-slate-500">Verified Recovery Desk for Supply Chain Operations</p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-slate-900 py-8 px-6 shadow-xl border border-slate-800 sm:rounded-lg sm:px-10">
+        <div className="bg-white py-8 px-6 shadow-sm border border-slate-200 sm:rounded-xl sm:px-10">
           <form className="space-y-4" onSubmit={handleLogin}>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Username
               </label>
               <Input
@@ -80,7 +80,7 @@ export function SignInScreen({ onLoginSuccess }: { onLoginSuccess: () => void })
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                 Password
               </label>
               <Input
@@ -92,7 +92,7 @@ export function SignInScreen({ onLoginSuccess }: { onLoginSuccess: () => void })
             </div>
 
             {error && (
-              <div className="p-3 bg-red-950/50 border border-red-800 rounded text-xs text-red-300">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700">
                 {error}
               </div>
             )}
@@ -102,9 +102,9 @@ export function SignInScreen({ onLoginSuccess }: { onLoginSuccess: () => void })
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-800">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">
-              <Zap className="w-3.5 h-3.5" /> Demo Quick-Switch Roles
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 uppercase tracking-wider mb-3">
+              <Zap className="w-3.5 h-3.5 text-amber-600" /> Demo Quick-Switch Roles
             </div>
             <div className="space-y-2">
               {DEMO_USERS.map((u) => (
@@ -112,15 +112,15 @@ export function SignInScreen({ onLoginSuccess }: { onLoginSuccess: () => void })
                   key={u.username}
                   type="button"
                   onClick={() => handleDemoSwitch(u)}
-                  className="w-full text-left p-2.5 rounded bg-slate-950 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-colors flex items-center justify-between group"
+                  className="w-full text-left p-2.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors flex items-center justify-between group shadow-xs"
                 >
                   <div>
-                    <div className="text-xs font-medium text-slate-200 group-hover:text-indigo-300">
+                    <div className="text-xs font-semibold text-slate-800 group-hover:text-indigo-700">
                       {u.name}
                     </div>
-                    <div className="text-[11px] text-slate-500">{u.desc}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">{u.desc}</div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-slate-300 shrink-0 ml-2" />
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0 ml-2 transition-transform group-hover:translate-x-0.5" />
                 </button>
               ))}
             </div>

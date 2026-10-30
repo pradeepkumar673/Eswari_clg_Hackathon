@@ -1,7 +1,7 @@
 /**
  * apps/web/src/screens/IntakeScreen.tsx
  *
- * Screen 3: Intake and Quarantine.
+ * Screen 3: Intake and Quarantine (Bright Executive Theme).
  * - CSV/JSON upload with entity selector
  * - B11 Quality report (counts, error-reason chart, file hash, FILE_ALREADY_IMPORTED)
  * - Row-level error quarantine table with suggested fixes (accept, edit, discard)
@@ -99,10 +99,10 @@ export function IntakeScreen() {
   };
 
   return (
-    <div className="p-6 space-y-6 text-slate-100 max-w-7xl mx-auto">
-      <div className="pb-4 border-b border-slate-800">
-        <h1 className="text-xl font-bold tracking-tight text-white">Intake and Quarantine</h1>
-        <p className="text-xs text-slate-400">
+    <div className="p-6 space-y-6 text-slate-900 max-w-7xl mx-auto">
+      <div className="pb-4 border-b border-slate-200">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">Intake and Quarantine</h1>
+        <p className="text-xs text-slate-500">
           Governed file intake, row quarantine triage, carrier webhook simulator, and field text ingestion
         </p>
       </div>
@@ -113,19 +113,19 @@ export function IntakeScreen() {
         {/* Left Column (2 spans): File Upload & Quarantine Table */}
         <div className="lg:col-span-2 space-y-6">
           {/* Upload Card */}
-          <div className="p-5 rounded-lg bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-semibold text-slate-200">Import CSV or JSON</h3>
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Import CSV or JSON</h3>
 
             <form onSubmit={handleUpload} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                     Target Entity
                   </label>
                   <select
                     value={selectedEntity}
                     onChange={(e) => setSelectedEntity(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-200"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="shipments">Shipments</option>
                     <option value="inventory">Inventory Balances</option>
@@ -136,14 +136,14 @@ export function IntakeScreen() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                     Select File
                   </label>
                   <input
                     type="file"
                     accept=".csv,.json"
                     onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                    className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
                   />
                 </div>
               </div>
@@ -155,7 +155,7 @@ export function IntakeScreen() {
 
                 {importReport && importReport.status !== 'COMMITTED' && (
                   <Button type="button" variant="secondary" size="sm" onClick={handleCommit}>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mr-1" /> Commit Clean Rows
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mr-1" /> Commit Clean Rows
                   </Button>
                 )}
               </div>
@@ -164,31 +164,31 @@ export function IntakeScreen() {
 
           {/* B11 Quality Report */}
           {importReport && (
-            <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
+            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   B11 Import Quality Report
                 </h3>
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs font-mono text-slate-500">
                   SHA-256: {importReport.file_hash ? `${importReport.file_hash.slice(0, 16)}...` : 'Computed'}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="p-3 rounded bg-slate-950 border border-slate-800">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                   <div className="text-xs text-slate-500">Total Rows</div>
-                  <div className="text-lg font-mono font-bold text-slate-100">
+                  <div className="text-lg font-mono font-bold text-slate-900">
                     {importReport.row_count ?? importReport.total_rows ?? 0}
                   </div>
                 </div>
-                <div className="p-3 rounded bg-slate-950 border border-slate-800">
-                  <div className="text-xs text-slate-500">Valid Rows</div>
-                  <div className="text-lg font-mono font-bold text-emerald-400">
+                <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-200">
+                  <div className="text-xs text-emerald-800">Valid Rows</div>
+                  <div className="text-lg font-mono font-bold text-emerald-700">
                     {importReport.valid_count ?? importReport.clean_rows ?? 0}
                   </div>
                 </div>
-                <div className="p-3 rounded bg-slate-950 border border-slate-800">
-                  <div className="text-xs text-slate-500">Quarantined</div>
-                  <div className="text-lg font-mono font-bold text-red-400">
+                <div className="p-3 rounded-lg bg-rose-50/60 border border-rose-200">
+                  <div className="text-xs text-rose-800">Quarantined</div>
+                  <div className="text-lg font-mono font-bold text-rose-700">
                     {importReport.quarantined_count ?? importReport.quarantine_rows ?? 0}
                   </div>
                 </div>
@@ -197,43 +197,45 @@ export function IntakeScreen() {
           )}
 
           {/* Row-Level Quarantine Error Table */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-200">Quarantined Rows & Suggested Fixes</h3>
+          <div className="rounded-xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Quarantined Rows & Suggested Fixes</h3>
               <span className="text-xs text-slate-500 font-mono">{quarantineRows.length} Quarantined</span>
             </div>
 
             {quarantineRows.length === 0 ? (
-              <EmptyState
-                title="Quarantine is clear"
-                description="No unparseable or schema-violating rows awaiting correction."
-              />
+              <div className="p-4">
+                <EmptyState
+                  title="Quarantine is clear"
+                  description="No unparseable or schema-violating rows awaiting correction."
+                />
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950 text-slate-400 uppercase font-mono text-[10px]">
+                  <thead className="bg-slate-50 text-slate-600 uppercase font-mono text-[10px] border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">Row #</th>
-                      <th className="p-2.5">Field</th>
-                      <th className="p-2.5">Invalid Value</th>
-                      <th className="p-2.5">Rejection Reason</th>
-                      <th className="p-2.5">Suggested Fix</th>
-                      <th className="p-2.5">Actions</th>
+                      <th className="p-3">Row #</th>
+                      <th className="p-3">Field</th>
+                      <th className="p-3">Invalid Value</th>
+                      <th className="p-3">Rejection Reason</th>
+                      <th className="p-3">Suggested Fix</th>
+                      <th className="p-3">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-100">
                     {quarantineRows.map((q, idx) => (
-                      <tr key={q._id || idx} className="hover:bg-slate-800/40">
-                        <td className="p-2.5 font-mono text-slate-400">{q.row_number || idx + 1}</td>
-                        <td className="p-2.5 font-semibold text-slate-200">{q.error_field || 'qty'}</td>
-                        <td className="p-2.5 font-mono text-red-400">{String(q.raw_value || '-10')}</td>
-                        <td className="p-2.5 text-slate-400">{q.reason || 'Negative quantity invalid'}</td>
-                        <td className="p-2.5 text-emerald-400 font-mono">{q.suggested_fix || 'Set qty = 10'}</td>
-                        <td className="p-2.5 space-x-1.5">
-                          <button className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 hover:bg-emerald-900 text-[11px] font-semibold">
+                      <tr key={q._id || idx} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-3 font-mono text-slate-500">{q.row_number || idx + 1}</td>
+                        <td className="p-3 font-semibold text-slate-900">{q.error_field || 'qty'}</td>
+                        <td className="p-3 font-mono text-rose-700 font-medium">{String(q.raw_value || '-10')}</td>
+                        <td className="p-3 text-slate-600">{q.reason || 'Negative quantity invalid'}</td>
+                        <td className="p-3 text-emerald-700 font-mono font-medium">{q.suggested_fix || 'Set qty = 10'}</td>
+                        <td className="p-3 space-x-1.5">
+                          <button className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-[11px] font-semibold transition-colors">
                             Accept
                           </button>
-                          <button className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 text-[11px]">
+                          <button className="px-2 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 text-[11px] transition-colors">
                             Discard
                           </button>
                         </td>
@@ -249,12 +251,12 @@ export function IntakeScreen() {
         {/* Right Column: Carrier Simulator & B15 Paste Box */}
         <div className="space-y-6">
           {/* Carrier Webhook Simulator with Duplicate Storm Button */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-semibold text-slate-200">Carrier Webhook Simulator</h3>
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Zap className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-semibold text-slate-900">Carrier Webhook Simulator</h3>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               Simulates carrier webhook storms to demonstrate real duplicate detection and cryptographic replay immunity.
             </p>
 
@@ -269,22 +271,22 @@ export function IntakeScreen() {
             </Button>
 
             {stormResult && (
-              <div className="p-3 rounded bg-slate-950 border border-slate-800 text-xs space-y-1">
-                <div className="font-semibold text-emerald-400">Storm Execution Complete:</div>
-                <div className="text-slate-400">Applied: <span className="font-mono text-slate-200">{stormResult.applied ?? 1}</span></div>
-                <div className="text-slate-400">Duplicates Ignored: <span className="font-mono text-amber-400">{stormResult.duplicates ?? stormResult.ignored ?? 4}</span></div>
-                <div className="text-slate-400">Total Sent: <span className="font-mono text-slate-200">{stormResult.total ?? 5}</span></div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                <div className="font-semibold text-emerald-700">Storm Execution Complete:</div>
+                <div className="text-slate-600">Applied: <span className="font-mono text-slate-900 font-semibold">{stormResult.applied ?? 1}</span></div>
+                <div className="text-slate-600">Duplicates Ignored: <span className="font-mono text-amber-700 font-semibold">{stormResult.duplicates ?? stormResult.ignored ?? 4}</span></div>
+                <div className="text-slate-600">Total Sent: <span className="font-mono text-slate-900 font-semibold">{stormResult.total ?? 5}</span></div>
               </div>
             )}
           </div>
 
           {/* B15 Text Paste Box */}
-          <div className="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-indigo-400" />
-              <h3 className="text-sm font-semibold text-slate-200">B15 Text Ingestion</h3>
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <FileText className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-sm font-semibold text-slate-900">B15 Text Ingestion</h3>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               Paste informal carrier SMS, email updates or WhatsApp alerts to create verified draft event cards.
             </p>
 
@@ -294,7 +296,7 @@ export function IntakeScreen() {
                   key={i}
                   type="button"
                   onClick={() => setPastedText(msg)}
-                  className="px-2 py-1 rounded bg-slate-950 border border-slate-800 hover:border-slate-700 text-[10px] text-slate-300"
+                  className="px-2 py-1 rounded bg-slate-100 border border-slate-200 hover:border-slate-300 hover:bg-slate-200/60 text-[10px] text-slate-700 transition-colors"
                 >
                   Sample #{i + 1}
                 </button>
@@ -305,7 +307,7 @@ export function IntakeScreen() {
               rows={3}
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
 
             <Button
@@ -320,10 +322,10 @@ export function IntakeScreen() {
             </Button>
 
             {ingestResult && (
-              <div className="p-3 rounded bg-slate-950 border border-slate-800 text-xs space-y-1">
-                <div className="font-semibold text-emerald-400">Draft Card Created:</div>
-                <div className="text-slate-300">Shipment: <span className="font-mono">{ingestResult.event?.shipment_code || 'SHP-1042'}</span></div>
-                <div className="text-slate-300">Extracted Delay: <span className="font-mono text-amber-400">+{ingestResult.event?.delay_hours || 4}h</span></div>
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+                <div className="font-semibold text-emerald-700">Draft Card Created:</div>
+                <div className="text-slate-700">Shipment: <span className="font-mono font-semibold text-slate-900">{ingestResult.event?.shipment_code || 'SHP-1042'}</span></div>
+                <div className="text-slate-700">Extracted Delay: <span className="font-mono text-amber-700 font-semibold">+{ingestResult.event?.delay_hours || 4}h</span></div>
                 <div className="text-slate-500 text-[11px]">Status: Awaiting confirmation in Investigation screen</div>
               </div>
             )}

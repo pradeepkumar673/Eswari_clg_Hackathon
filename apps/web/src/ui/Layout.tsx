@@ -1,7 +1,7 @@
 /**
  * apps/web/src/ui/Layout.tsx
  *
- * Authoritative Application Shell for DisruptionIQ.
+ * Authoritative Application Shell for DisruptionIQ (Bright Executive Theme).
  *
  * Header contains:
  * - Brand logo & title
@@ -98,25 +98,28 @@ export function Layout({
   const [outbox, setOutbox] = useState<any[]>([]);
 
   // SimClock time
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => {
+      setCurrentTime((prev) => new Date(prev.getTime() + 1000));
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
   }, []);
 
-  // Poll notifications
+  // Notifications live load
   useEffect(() => {
     let mounted = true;
     const loadNotifs = async () => {
       try {
-        const [nList, oList] = await Promise.all([
-          api.notifications.getNotifications().catch(() => []),
-          api.notifications.getOutbox().catch(() => []),
-        ]);
-        if (!mounted) return;
-        setNotifications(Array.isArray(nList) ? nList : []);
-        setOutbox(Array.isArray(oList) ? oList : []);
+        const notifRes = await api.notifications.getNotifications();
+        if (mounted && Array.isArray(notifRes)) setNotifications(notifRes);
+
+        const outboxRes = await api.notifications.getOutbox();
+        if (mounted && Array.isArray(outboxRes)) setOutbox(outboxRes);
       } catch {
         // quiet fallback
       }
@@ -183,22 +186,22 @@ export function Layout({
       : outbox.filter((m) => m.channel === activeChannelTab);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased">
       {/* Top Header */}
-      <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40 select-none">
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40 select-none shadow-xs">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-xs">
             IQ
           </div>
-          <span className="font-bold text-sm tracking-tight text-white hidden sm:inline-block">
-            DisruptionIQ <span className="text-indigo-400 font-mono text-xs font-normal">Desk</span>
+          <span className="font-bold text-sm tracking-tight text-slate-900 hidden sm:inline-block">
+            DisruptionIQ <span className="text-indigo-600 font-mono text-xs font-semibold">Desk</span>
           </span>
         </div>
 
         {/* Center: SimClock */}
-        <div className="flex items-center gap-2 px-3 py-1 rounded bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
-          <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+        <div className="flex items-center gap-2 px-3 py-1 rounded bg-slate-100 border border-slate-200 text-xs font-mono text-slate-700">
+          <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
           <span>{formattedTime} IST</span>
         </div>
 
@@ -209,16 +212,16 @@ export function Layout({
             variant="ghost"
             size="sm"
             onClick={() => setAskDrawerOpen(true)}
-            className="text-slate-300 hover:text-white"
+            className="text-slate-700 hover:text-slate-900"
           >
-            <MessageSquare className="w-3.5 h-3.5 text-indigo-400 mr-1.5" />
-            <span className="hidden md:inline">Ask Desk</span>
+            <MessageSquare className="w-3.5 h-3.5 text-indigo-600 mr-1.5" />
+            <span className="hidden md:inline font-medium">Ask Desk</span>
           </Button>
 
           {/* Notifications Bell */}
           <button
             onClick={() => setNotifDrawerOpen(true)}
-            className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors relative"
+            className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors relative"
             title="Communications and Outbox"
           >
             <Bell className="w-4 h-4" />
@@ -233,8 +236,8 @@ export function Layout({
 
           {/* Role Badge & Demo Role Switcher */}
           {user && (
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-              <span className="px-2 py-0.5 rounded bg-indigo-950/80 border border-indigo-800 text-[11px] font-mono font-semibold text-indigo-300">
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              <span className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[11px] font-mono font-semibold text-indigo-700">
                 {user.role}
               </span>
 
@@ -246,7 +249,7 @@ export function Layout({
                   if (target) handleDemoRoleSwitch(target);
                 }}
                 disabled={roleSwitching}
-                className="bg-slate-950 border border-slate-700 rounded text-[11px] text-slate-300 py-1 px-1.5 cursor-pointer hover:border-slate-600 focus:outline-none"
+                className="bg-white border border-slate-300 rounded text-[11px] text-slate-700 py-1 px-2 cursor-pointer shadow-xs hover:border-slate-400 focus:outline-none"
                 title="Switch demo role"
               >
                 {DEMO_ROLES.map((r) => (
@@ -258,7 +261,7 @@ export function Layout({
 
               <button
                 onClick={handleLogout}
-                className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors"
+                className="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                 title="Sign out"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -271,8 +274,8 @@ export function Layout({
       {/* Body: Left Nav + Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Navigation Sidebar (The Exactly 8 Blueprint Screens) */}
-        <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col py-4 shrink-0 select-none hidden md:flex">
-          <div className="px-3 mb-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+        <aside className="w-56 bg-white border-r border-slate-200 flex flex-col py-4 shrink-0 select-none hidden md:flex">
+          <div className="px-3 mb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
             Operational Screens
           </div>
 
@@ -286,8 +289,8 @@ export function Layout({
                   to={s.path}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-indigo-600 text-white font-semibold'
-                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
+                      ? 'bg-indigo-50 text-indigo-700 font-semibold border-r-2 border-indigo-600'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -297,13 +300,13 @@ export function Layout({
             })}
           </nav>
 
-          <div className="px-4 pt-3 border-t border-slate-800 text-[11px] text-slate-500 font-mono">
+          <div className="px-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 font-mono">
             DisruptionIQ v1.0
           </div>
         </aside>
 
         {/* Content Viewport */}
-        <main className="flex-1 overflow-y-auto bg-slate-950">
+        <main className="flex-1 overflow-y-auto bg-slate-50">
           {children}
         </main>
       </div>
@@ -317,13 +320,13 @@ export function Layout({
       >
         <div className="space-y-4 text-xs">
           {/* Channel Tabs */}
-          <div className="flex border-b border-slate-800 gap-4 text-xs">
+          <div className="flex border-b border-slate-200 gap-4 text-xs">
             <button
               onClick={() => setActiveChannelTab('IN_APP')}
               className={`pb-2 flex items-center gap-1.5 border-b-2 font-medium ${
                 activeChannelTab === 'IN_APP'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-indigo-600 text-indigo-600 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <Bell className="w-3.5 h-3.5" />
@@ -333,8 +336,8 @@ export function Layout({
               onClick={() => setActiveChannelTab('EMAIL_SIM')}
               className={`pb-2 flex items-center gap-1.5 border-b-2 font-medium ${
                 activeChannelTab === 'EMAIL_SIM'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-indigo-600 text-indigo-600 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <Mail className="w-3.5 h-3.5" />
@@ -344,8 +347,8 @@ export function Layout({
               onClick={() => setActiveChannelTab('WHATSAPP_SIM')}
               className={`pb-2 flex items-center gap-1.5 border-b-2 font-medium ${
                 activeChannelTab === 'WHATSAPP_SIM'
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-indigo-600 text-indigo-600 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
@@ -355,25 +358,25 @@ export function Layout({
 
           {/* List */}
           {filteredCommunications.length === 0 ? (
-            <div className="p-4 rounded bg-slate-950 border border-slate-800 text-center text-slate-500">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-center text-slate-500">
               No messages queued for {activeChannelTab}.
             </div>
           ) : (
             <div className="space-y-2.5">
               {filteredCommunications.map((msg, idx) => (
-                <div key={msg._id || idx} className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5">
+                <div key={msg._id || idx} className="p-3 rounded-lg bg-white border border-slate-200 shadow-xs space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-indigo-300">
+                    <span className="font-semibold text-slate-900">
                       {msg.title || msg.subject || msg.recipient || 'System Notification'}
                     </span>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-slate-400">
                       {msg.created_at ? new Date(msg.created_at).toLocaleTimeString('en-IN') : 'Recent'}
                     </span>
                   </div>
-                  <p className="text-slate-300 leading-relaxed">{msg.body || msg.message || msg.content}</p>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                  <p className="text-slate-700 leading-relaxed">{msg.body || msg.message || msg.content}</p>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
                     <span>Channel: {msg.channel || activeChannelTab}</span>
-                    <span className="text-emerald-400 font-mono">DELIVERED</span>
+                    <span className="text-emerald-700 font-mono font-medium">DELIVERED</span>
                   </div>
                 </div>
               ))}
@@ -390,13 +393,13 @@ export function Layout({
         width="w-[560px]"
       >
         <div className="space-y-4">
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <p className="text-xs text-slate-600 leading-relaxed">
             Query affected orders, active disruptions, or inventory balances. All answers verified against immutable database records with zero hallucinations.
           </p>
 
           {/* Prompt Chips */}
           <div className="space-y-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
               Suggested Operational Queries:
             </span>
             <div className="flex flex-wrap gap-1.5">
@@ -408,7 +411,7 @@ export function Layout({
                     setAskQuery(chip);
                     handleAskSubmit(undefined, chip);
                   }}
-                  className="px-2.5 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700 transition-colors text-left"
+                  className="px-2.5 py-1 rounded bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 text-[11px] text-slate-700 border border-slate-200 transition-colors text-left"
                 >
                   {chip}
                 </button>
@@ -422,7 +425,7 @@ export function Layout({
               type="text"
               value={askQuery}
               onChange={(e) => setAskQuery(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             <Button type="submit" variant="primary" size="sm" className="w-full" loading={askLoading}>
               Ask Operational Desk
@@ -431,39 +434,39 @@ export function Layout({
 
           {/* Answer Area */}
           {askAnswer && (
-            <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs space-y-3">
+            <div className="p-4 rounded-lg bg-white border border-slate-200 shadow-xs text-xs space-y-3">
               {askAnswer.refused ? (
-                <div className="p-3 rounded bg-amber-950/40 border border-amber-800 text-amber-300 space-y-1">
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
                   <div className="flex items-center gap-1.5 font-bold">
-                    <AlertCircle className="w-4 h-4 text-amber-400" />
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
                     Write Intent Refused
                   </div>
-                  <p className="text-amber-200/90 text-xs">
+                  <p className="text-amber-800 text-xs">
                     Ask Desk operates in strict read-only intelligence mode. State mutations must be executed through governed Recovery Plans and Approvals.
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="font-semibold text-white flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     Verified Desk Answer:
                   </div>
-                  <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{askAnswer.answer}</p>
+                  <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">{askAnswer.answer}</p>
 
                   {/* Fact Claims Table */}
                   {askAnswer.facts && askAnswer.facts.length > 0 && (
-                    <div className="pt-2 border-t border-slate-800/80 space-y-2">
-                      <span className="text-[10px] font-semibold uppercase text-slate-400 block">
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      <span className="text-[10px] font-semibold uppercase text-slate-500 block">
                         ANSWER_FACT Grounded Claims:
                       </span>
                       <div className="space-y-1">
                         {askAnswer.facts.map((f: any, idx: number) => (
                           <div
                             key={idx}
-                            className="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px]"
+                            className="p-2 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px]"
                           >
-                            <span className="text-slate-300 font-mono">{f.entity || f.field}: {f.value}</span>
-                            <span className="text-emerald-400 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-800">
+                            <span className="text-slate-800 font-mono">{f.entity || f.field}: {f.value}</span>
+                            <span className="text-emerald-700 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200">
                               VERIFIED
                             </span>
                           </div>
@@ -473,7 +476,7 @@ export function Layout({
                   )}
 
                   {askAnswer.proof_summary && (
-                    <div className="pt-2 border-t border-slate-800/80 text-[11px] text-emerald-400 font-mono">
+                    <div className="pt-2 border-t border-slate-100 text-[11px] text-emerald-700 font-mono">
                       ✓ {askAnswer.proof_summary.passing} of {askAnswer.proof_summary.total} facts verified against database rows.
                     </div>
                   )}
