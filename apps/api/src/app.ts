@@ -11,6 +11,9 @@ import { voiceRouter, textIngestRouter, fixturesRouter } from './routes/ingest.j
 import { disruptionsRouter, riskPolicyRouter, evidenceRouter } from './routes/disruptions.js';
 import { plansRouter } from './routes/plans.js';
 import { approvalsRouter } from './routes/approvals.js';
+import { conflictsRouter } from './routes/conflicts.js';
+import { guardrailsRouter } from './routes/guardrails.js';
+import { overviewRouter } from './routes/overview.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
 
@@ -103,6 +106,15 @@ app.use('/', plansRouter);
 
 app.use('/api/v1/approvals', approvalsRouter);
 app.use('/approvals', approvalsRouter);
+
+app.use('/api/v1/conflicts', conflictsRouter);
+app.use('/conflicts', conflictsRouter);
+
+app.use('/api/v1/guardrails', guardrailsRouter);
+app.use('/guardrails', guardrailsRouter);
+
+app.use('/api/v1/overview', overviewRouter);
+app.use('/overview', overviewRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

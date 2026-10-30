@@ -17,7 +17,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 6 | Voice and text ingestion, impact engine and risk bands | **STEP 6: PASS** |
 | 7 | Solver service and recovery plan generation | **STEP 7: PASS** |
 | 8 | Proof checker, Decision Contract and governed approvals | **STEP 8: PASS** |
-| 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | NOT STARTED |
+| 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | **STEP 9: PASS** |
 | 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | NOT STARTED |
 | 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | NOT STARTED |
 | 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | NOT STARTED |
@@ -171,15 +171,43 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
   - `apps/api/src/routes/approvals.ts`: `GET /approvals/queue` returning pending approval items for caller's role.
   - Domain bus events: `PLAN_SUBMITTED`, `APPROVAL_DECIDED`, `PLAN_APPROVED`.
 
+### Step 9 — Reservations, conflict court, ledger, rollback, guardrails and promise dates (PASS)
+- **Milestone Reached**: Event to approved, executed, and rolled-back plan works through the API with zero double-booking.
+- **Part A: Double-booking shield, Allocation Conflict Court, Execution Ledger & Rollback (S1, S2, A4)**:
+  - `apps/api/src/services/reservations.ts`:
+    - Double-Booking Shield (S1): deterministic `(warehouse_id, sku_id)` sort, atomic conditional `updateOne` inside MongoDB replica set transaction checking `$gte: [ { $subtract: ['$on_hand', '$reserved'] }, qty ]`. On conflict returns 409 conflict card.
+    - Allocation Conflict Court (A4): creates single `allocation_conflicts` case with competing `allocation_claims` if stock is oversubscribed by competing plans.
+    - Reaper function `reapExpiredReservations()` to sweep expired holds.
+  - `apps/api/src/routes/conflicts.ts`:
+    - `GET /conflicts/allocation` & `GET /conflicts/allocation/:id`: lists open/resolved allocation cases with claims.
+    - `POST /conflicts/allocation/:id/resolve`: Manager ruling. Winner proceeds, loser marked `BLOCKED`, loser's stock released, fully audited.
+  - `apps/api/src/routes/plans.ts`:
+    - `POST /plans/:id/execute` (Manager only): enforces `APPROVED` state, contract hash freshness, separation of duties (`executor != creator` and `executor != submitter`), confirmation flag, and guardrail breach acknowledgement if ESCALATED. Executes simulated movements (donor decremented, destination incremented), writes `execution_ledger` rows joined to hash chain via `writeLedgerEntry`, commits reservations to CONSUMED, sets status to `EXECUTED`.
+    - `POST /plans/:id/rollback` (Manager only): checks reversal feasibility, restores exact balances, writes `COMPENSATE` entries into ledger, sets status to `ROLLED_BACK`.
+  - `apps/api/src/routes/overview.ts`: `GET /overview` computing real recovery progress per disruption (`APPROVED`, `EXECUTED`, `ROLLED_BACK` counts, orders recovered).
+- **Part B: Promise-Date Repair Engine (A7) and Budget Guardrails (A9)**:
+  - `apps/api/src/services/promiseDates.ts`:
+    - Computes original due date, best recoverable date (latest of transit/supplier lead times + 2h processing), committed promise date, basis string, and evidence IDs.
+    - `GET /plans/:id/promise-dates`: returns repaired promise dates.
+  - `apps/api/src/services/guardrails.ts`:
+    - Checks 4 policies on every plan version: `EXPEDITE_SPEND` (₹6,000), `SERVICE_DAMAGE_RESIDUAL` (₹2,500), `SUPPLIER_RISK` (50), `TRANSFER_DISTANCE` (400 km).
+    - Upserts `guardrail_checks` rows. On breach adds missing approver role, or marks plan `ESCALATED` if both roles already required.
+  - `apps/api/src/routes/guardrails.ts`:
+    - `GET /guardrails`: lists policies.
+    - `PUT /guardrails/:id`: updates threshold value (Manager, Administrator), audited.
+    - `POST /guardrails/:id/clear-escalation`: clears escalation (Manager, Procurement_Approver; Administrator blocked), audited.
+    - `GET /plans/:id/guardrails`: returns check rows for plan version.
+  - Auto-triggering: Re-runs guardrails and promise dates automatically on any `submit` and `PATCH`.
+
 ---
 
 ## NEXT STEP
 
-**Step 9 — Reservations, conflict court, ledger, rollback, guardrails and promise dates (S1, S2, A4, A9, A7)**
-- Target Model: OPUS 4.6
+**Step 10 — Control tower backend and audit replay (A1, A12, B1, B3, B6, B7, A5, A8, B17)**
+- Target Model: SONNET 4.6
 - Deliverables:
-  - Part A: Double-booking shield conditional update, Allocation Conflict Court (`allocation_conflicts`), Execution ledger (`POST /plans/:id/execute`), Rollback engine (`POST /plans/:id/rollback`).
-  - Part B: Promise-Date Repair Engine (A7) and Budget Guardrails (A9).
+  - Part A: Notifications (A1), Late-Shipment Detector (B6), Stock alerts (B7), Alert feed (B3), KPI strip (B1), SPOF radar (A12).
+  - Part B: Decision Replay (A5), Event Lineage (A8), Provenance (B17) for audit_logs and execution_ledger.
 
 ---
 

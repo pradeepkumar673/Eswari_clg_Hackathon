@@ -627,3 +627,4 @@ export async function clearChallengeClaims(
   const res = await PlanClaim.deleteMany({ plan_id: pId, origin: 'CHALLENGE' });
   return res.deletedCount || 0;
 }
+

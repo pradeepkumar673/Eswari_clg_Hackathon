@@ -8,6 +8,7 @@ export interface IStockReservation extends Document {
   quantity: number;
   status: 'HELD' | 'RELEASED' | 'CONSUMED';
   reserved_at: Date;
+  expires_at: Date | null;
   released_at: Date | null;
 }
 
@@ -22,8 +23,10 @@ const StockReservationSchema = new Schema<IStockReservation>(
       type: String,
       enum: ['HELD', 'RELEASED', 'CONSUMED'],
       required: true,
+      default: 'HELD',
     },
     reserved_at: { type: Date, required: true, default: Date.now },
+    expires_at: { type: Date, default: null },
     released_at: { type: Date, default: null },
   },
   { collection: 'stock_reservations' }

@@ -17,7 +17,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
+import mongoose, { ClientSession } from 'mongoose';
 import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { Disruption } from '../models/disruptions.js';
 import { Shipment } from '../models/shipments.js';
@@ -39,8 +39,13 @@ import {
   deriveRequiredApproverRoles,
   computeContractHash,
 } from '../services/proofChecker.js';
-import { reserveStock, releaseStock } from '../services/reservations.js';
-import { writeAudit } from '../services/audit.js';
+import { reserveStock, releaseStock, commitStock } from '../services/reservations.js';
+import { runGuardrailChecks } from '../services/guardrails.js';
+import { computePromiseDatesForPlan } from '../services/promiseDates.js';
+import { GuardrailCheck } from '../models/guardrail-checks.js';
+import { ExecutionLedger } from '../models/execution-ledger.js';
+import { writeAudit, writeLedgerEntry } from '../services/audit.js';
+import { withTransaction } from '../db/withTransaction.js';
 import { simClock } from '../services/simClock.js';
 import { publish } from '../services/bus.js';
 import { config } from '../config.js';
@@ -617,16 +622,28 @@ plansRouter.post(
         return;
       }
 
+      // Guardrails and Promise Dates computation
+      const guardrailRes = await runGuardrailChecks(plan._id, plan.version);
+      const promiseDates = await computePromiseDatesForPlan(plan._id);
+
       // Reserve stock
       const reserveRes = await reserveStock(plan._id);
       if (!reserveRes.success) {
-        err(res, 409, 'STOCK_RESERVATION_CONFLICT', reserveRes.conflictReason || 'Failed to reserve stock');
+        err(res, 409, 'STOCK_RESERVATION_CONFLICT', reserveRes.conflictReason || 'Failed to reserve stock', reserveRes.conflictCard);
         return;
       }
 
       const now = await simClock.now();
       const actions = await PlanAction.find({ plan_id: plan._id });
-      const requiredRoles = deriveRequiredApproverRoles(actions);
+      let requiredRoles = deriveRequiredApproverRoles(actions);
+
+      // If guardrails added missing roles, incorporate them
+      for (const addedRole of guardrailRes.addedRoles) {
+        if (!requiredRoles.includes(addedRole)) {
+          requiredRoles.push(addedRole);
+        }
+      }
+
       const contractHash = plan.contract_hash || computeContractHash(actions);
 
       // Freeze Decision Contract
@@ -635,6 +652,13 @@ plansRouter.post(
       plan.submitted_at = now;
       if (plan.decision_contract) {
         plan.decision_contract.reservation_ids = reserveRes.reservationIds;
+        plan.decision_contract.guardrail_results = guardrailRes.checks;
+        plan.decision_contract.committed_promise_dates = promiseDates.map((p) => ({
+          order_code: p.order_code,
+          promised_at: p.current_promise,
+        }));
+        plan.decision_contract.escalation_approvals_required = guardrailRes.escalated;
+        plan.decision_contract.required_approver_roles = requiredRoles;
       }
       await plan.save();
 
@@ -955,6 +979,10 @@ plansRouter.patch(
       // Release any stock reservations from earlier version
       await releaseStock(plan._id);
 
+      // Re-run guardrails and promise dates automatically after any PATCH
+      await runGuardrailChecks(plan._id, plan.version);
+      await computePromiseDatesForPlan(plan._id);
+
       await writeAudit({
         action: 'RECOVERY_PLAN_MODIFIED',
         actor: req.user!._id,
@@ -974,3 +1002,375 @@ plansRouter.patch(
     }
   },
 );
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/execute (Manager only, M6, S1)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/execute',
+  authenticateToken,
+  requirePermission('confirm_execution'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const user = req.user!;
+      if (user.role !== 'Manager') {
+        err(res, 403, 'FORBIDDEN', 'Only Supply Chain Manager can execute recovery plans'); return;
+      }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      if (plan.status !== 'APPROVED') {
+        err(res, 409, 'INVALID_STATE', `Plan must be APPROVED to execute, current status: ${plan.status}`);
+        return;
+      }
+
+      const actions = await PlanAction.find({ plan_id: plan._id });
+      const currentHash = computeContractHash(actions);
+      if (plan.contract_hash !== currentHash) {
+        err(res, 409, 'STALE_CONTRACT_HASH', 'Plan actions do not match approved contract hash'); return;
+      }
+
+      // Separation of duties: executor cannot be creator or submitter
+      if (plan.created_by.equals(user._id) || (plan.submitted_by && plan.submitted_by.equals(user._id))) {
+        err(res, 403, 'SELF_EXECUTION_FORBIDDEN', 'Executor cannot be the creator or submitter of the plan');
+        return;
+      }
+
+      // Explicit confirmation flag required
+      if (!req.body.confirmed) {
+        err(res, 400, 'CONFIRMATION_REQUIRED', 'Explicit confirmation flag `confirmed: true` required in body');
+        return;
+      }
+
+      // If plan is ESCALATED, guardrail breach acknowledgement is required
+      const isEscalated = plan.decision_contract?.escalation_approvals_required || (plan as any).guardrail_status === 'ESCALATED';
+      if (isEscalated && !req.body.guardrail_acknowledgement && !req.body.acknowledge_breach) {
+        err(res, 400, 'BREACH_ACKNOWLEDGEMENT_REQUIRED', 'Plan is ESCALATED: manager must explicitly acknowledge guardrail breach (`guardrail_acknowledgement: true`)');
+        return;
+      }
+
+      const now = await simClock.now();
+
+      await withTransaction(async (session: ClientSession) => {
+        for (const act of actions) {
+          if (act.action_type === 'TRANSFER' && act.from_warehouse_id) {
+            // Deduct donor stock
+            const donorBal = await InventoryBalance.findOne({
+              warehouse_id: act.from_warehouse_id,
+              sku_id: act.sku_id,
+            }).session(session);
+
+            if (donorBal) {
+              const beforeDonor = { on_hand: donorBal.on_hand, reserved: donorBal.reserved };
+              donorBal.on_hand -= act.quantity;
+              donorBal.reserved = Math.max(0, donorBal.reserved - act.quantity);
+              donorBal.updated_at = now;
+              await donorBal.save({ session });
+              const afterDonor = { on_hand: donorBal.on_hand, reserved: donorBal.reserved };
+
+              await writeLedgerEntry(
+                {
+                  planId: plan._id,
+                  actionId: act._id,
+                  stepType: 'TRANSFER_COMPLETE',
+                  warehouseId: act.from_warehouse_id,
+                  skuId: act.sku_id,
+                  deltaOnHand: -act.quantity,
+                  beforeState: beforeDonor,
+                  afterState: afterDonor,
+                  actor: user._id,
+                },
+                session,
+              );
+            }
+
+            // Increase destination stock
+            const destBal = await InventoryBalance.findOne({
+              warehouse_id: act.to_warehouse_id,
+              sku_id: act.sku_id,
+            }).session(session);
+
+            if (destBal) {
+              const beforeDest = { on_hand: destBal.on_hand, reserved: destBal.reserved };
+              destBal.on_hand += act.quantity;
+              destBal.updated_at = now;
+              await destBal.save({ session });
+              const afterDest = { on_hand: destBal.on_hand, reserved: destBal.reserved };
+
+              await writeLedgerEntry(
+                {
+                  planId: plan._id,
+                  actionId: act._id,
+                  stepType: 'TRANSFER_COMPLETE',
+                  warehouseId: act.to_warehouse_id,
+                  skuId: act.sku_id,
+                  deltaOnHand: act.quantity,
+                  beforeState: beforeDest,
+                  afterState: afterDest,
+                  actor: user._id,
+                },
+                session,
+              );
+            }
+          } else if (act.action_type === 'RESERVE' || act.action_type === 'EXPEDITE') {
+            // Inbound arrival recorded as inbound supply into destination warehouse
+            const destBal = await InventoryBalance.findOne({
+              warehouse_id: act.to_warehouse_id,
+              sku_id: act.sku_id,
+            }).session(session);
+
+            if (destBal) {
+              const beforeDest = { on_hand: destBal.on_hand, reserved: destBal.reserved };
+              destBal.on_hand += act.quantity;
+              destBal.updated_at = now;
+              await destBal.save({ session });
+              const afterDest = { on_hand: destBal.on_hand, reserved: destBal.reserved };
+
+              await writeLedgerEntry(
+                {
+                  planId: plan._id,
+                  actionId: act._id,
+                  stepType: 'RESERVE',
+                  warehouseId: act.to_warehouse_id,
+                  skuId: act.sku_id,
+                  deltaOnHand: act.quantity,
+                  beforeState: beforeDest,
+                  afterState: afterDest,
+                  actor: user._id,
+                },
+                session,
+              );
+            }
+          }
+
+          act.status = 'COMPLETED';
+          await act.save({ session });
+        }
+
+        // Commit held reservations
+        await commitStock(plan._id, session);
+
+        // Update orders
+        await Order.updateMany(
+          { warehouse_id: actions[0]?.to_warehouse_id },
+          { $set: { recovery_plan_id: plan._id, status: 'RECOVERING' } },
+          { session },
+        );
+
+        plan.status = 'EXECUTED';
+        (plan as any).executed_at = now;
+        (plan as any).executed_by = user._id;
+        await plan.save({ session });
+      });
+
+      await writeAudit({
+        action: 'PLAN_EXECUTED',
+        actor: user._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        after: { version: plan.version, executed_at: now },
+      });
+
+      await publish('PLAN_EXECUTED', {
+        planId: plan._id.toString(),
+        executedBy: user._id.toString(),
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        status: 'EXECUTED',
+        executed_at: now,
+        message: 'Recovery plan executed successfully. Stock movements committed to ledger.',
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/rollback (Manager only, S1)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/rollback',
+  authenticateToken,
+  requirePermission('rollback'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const user = req.user!;
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      if (plan.status !== 'EXECUTED') {
+        err(res, 409, 'INVALID_STATE', `Only EXECUTED plans may be rolled back, current status: ${plan.status}`);
+        return;
+      }
+
+      const actions = await PlanAction.find({ plan_id: plan._id });
+      const now = await simClock.now();
+
+      await withTransaction(async (session: ClientSession) => {
+        // Feasibility check: Reversing must not push balance below zero or below reserved
+        for (const act of actions) {
+          const destBal = await InventoryBalance.findOne({
+            warehouse_id: act.to_warehouse_id,
+            sku_id: act.sku_id,
+          }).session(session);
+
+          if (!destBal || (destBal.on_hand - act.quantity) < 0) {
+            throw new Error(
+              `Cannot rollback: destination warehouse balance would drop below zero for SKU ${act.sku_id}`,
+            );
+          }
+        }
+
+        // Reversal execution
+        for (const act of actions) {
+          if (act.action_type === 'TRANSFER' && act.from_warehouse_id) {
+            // Restore donor stock
+            const donorBal = await InventoryBalance.findOne({
+              warehouse_id: act.from_warehouse_id,
+              sku_id: act.sku_id,
+            }).session(session);
+
+            if (donorBal) {
+              const beforeDonor = { on_hand: donorBal.on_hand, reserved: donorBal.reserved };
+              donorBal.on_hand += act.quantity;
+              donorBal.updated_at = now;
+              await donorBal.save({ session });
+              const afterDonor = { on_hand: donorBal.on_hand, reserved: donorBal.reserved };
+
+              await writeLedgerEntry(
+                {
+                  planId: plan._id,
+                  actionId: act._id,
+                  stepType: 'COMPENSATE',
+                  warehouseId: act.from_warehouse_id,
+                  skuId: act.sku_id,
+                  deltaOnHand: act.quantity,
+                  beforeState: beforeDonor,
+                  afterState: afterDonor,
+                  actor: user._id,
+                },
+                session,
+              );
+            }
+
+            // Deduct destination stock
+            const destBal = await InventoryBalance.findOne({
+              warehouse_id: act.to_warehouse_id,
+              sku_id: act.sku_id,
+            }).session(session);
+
+            if (destBal) {
+              const beforeDest = { on_hand: destBal.on_hand, reserved: destBal.reserved };
+              destBal.on_hand -= act.quantity;
+              destBal.updated_at = now;
+              await destBal.save({ session });
+              const afterDest = { on_hand: destBal.on_hand, reserved: destBal.reserved };
+
+              await writeLedgerEntry(
+                {
+                  planId: plan._id,
+                  actionId: act._id,
+                  stepType: 'COMPENSATE',
+                  warehouseId: act.to_warehouse_id,
+                  skuId: act.sku_id,
+                  deltaOnHand: -act.quantity,
+                  beforeState: beforeDest,
+                  afterState: afterDest,
+                  actor: user._id,
+                },
+                session,
+              );
+            }
+          }
+
+          act.status = 'ROLLED_BACK';
+          await act.save({ session });
+        }
+
+        plan.status = 'ROLLED_BACK';
+        await plan.save({ session });
+      });
+
+      await releaseStock(plan._id);
+
+      await writeAudit({
+        action: 'PLAN_ROLLED_BACK',
+        actor: user._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        after: { status: 'ROLLED_BACK', rolled_back_at: now },
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        status: 'ROLLED_BACK',
+        message: 'Recovery plan rolled back successfully. Balances restored and compensatory ledger entries written.',
+      });
+    } catch (e: any) {
+      if (e.message && e.message.includes('Cannot rollback')) {
+        err(res, 409, 'ROLLBACK_INFEASIBLE', e.message); return;
+      }
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /plans/:id/promise-dates (Promise-Date Repair Engine A7)
+// ---------------------------------------------------------------------------
+plansRouter.get(
+  '/plans/:id/promise-dates',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const dates = await computePromiseDatesForPlan(id);
+      res.status(200).json({ plan_id: id, promise_dates: dates });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /plans/:id/guardrails (Budget Guardrails A9)
+// ---------------------------------------------------------------------------
+plansRouter.get(
+  '/plans/:id/guardrails',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const plan = await RecoveryPlan.findById(id).lean();
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      const checks = await GuardrailCheck.find({
+        plan_id: plan._id,
+        plan_version: plan.version,
+      })
+        .populate('policy_id')
+        .lean();
+
+      res.status(200).json({ plan_id: id, version: plan.version, checks });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
