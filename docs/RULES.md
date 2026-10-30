@@ -163,3 +163,15 @@ No API route exists without `requirePermission`. At startup the api runs a **sel
 
 Public routes (no auth required): `POST /auth/login`, `GET /api/v1/health`.
 
+---
+
+## FREE-TIER OPERATING RULES
+
+- Each step has Part A and Part B. After each part: run that part's tests, commit "step N part A: <what was built>" (or part B), and update the IN PROGRESS section of docs/STATE.md with exactly what is done and what is next.
+- Read only the docs/BLUEPRINT.md sections named in the step prompt (the final audit step reads everything). Do not paste large file contents or long test output back into the chat; summarise and show only failures.
+- Keep every source file under about 400 lines; split modules instead of growing one file.
+- Parts tagged as correctness-critical (reconciler, solver, proof checker, approvals, reservations, concurrency, red-team, acceptance, audit): write the tests first.
+- A part is not finished until its tests pass; never mark PASS on a step with a failing test or a non-empty KNOWN ISSUES list.
+- Never use placeholder values of any kind (see NO PLACEHOLDERS rule). If a value is needed, it comes from the database, a computation over it, or the seed script.
+
+

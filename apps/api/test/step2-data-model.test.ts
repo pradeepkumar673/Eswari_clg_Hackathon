@@ -10,7 +10,7 @@
  * 3. Security roles (app_rw, app_readonly) exist with correct privileges.
  *    NOTE: Runtime enforcement requires --auth, which is unavailable on this
  *    Windows dev environment (MongoDB replSet + keyFile instability). Role
- *    enforcement is verified in Step 21 (red-team) on a Linux environment.
+ *    enforcement is verified in Step 12 (red-team) on a Linux environment.
  * 4. Second OPEN alert with same alert_key is rejected;
  *    CLEARED then new OPEN works.
  * 5. A transaction that fails midway leaves no partial writes.
@@ -170,7 +170,7 @@ describe('Test 2 — inventory_balances: reserved <= on_hand', () => {
 // Runtime enforcement requires --auth + keyFile which is unstable on Windows
 // (MongoDB 8.3 replSet crashes with keyFile due to FTDC issues).
 // We verify role CONFIGURATION: users exist, roles exist, privileges are correct.
-// Runtime enforcement is covered in Step 21 (red-team) on a Linux environment.
+// Runtime enforcement is covered in Step 12 (red-team) on a Linux environment.
 
 describe('Test 3 — security roles: configuration verification', () => {
   it('app_rw user exists in disruptioniq db with rw_except_appendonly role', async () => {

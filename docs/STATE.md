@@ -13,32 +13,26 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 2 | Data model and security roles | **STEP 2: PASS** |
 | 3 | Seed data | **STEP 3: PASS** |
 | 4 | Auth, RBAC, audit hash chain | **STEP 4: PASS** |
-| 5 | Frontend shell and design system | NOT STARTED |
-| 6 | Import pipeline | NOT STARTED |
-| 7 | Reconciler and webhook | NOT STARTED |
-| 8 | Events, voice, text ingestion backend | NOT STARTED |
-| 9 | Impact, risk, bands | NOT STARTED |
-| 10 | Solver service | NOT STARTED |
-| 11 | Plan generation, routes, trade-offs | NOT STARTED |
-| 12 | Proof checker and Decision Contract | NOT STARTED |
-| 13 | Approvals and separation of duties | NOT STARTED |
-| 14 | Reservations, court, ledger, rollback | NOT STARTED |
-| 15 | Guardrails and promise dates | NOT STARTED |
-| 16 | Notifications, detectors, alerts, KPIs | NOT STARTED |
-| 17 | Audit viewer, replay, lineage, provenance | NOT STARTED |
-| 18 | Intelligence panels backend | NOT STARTED |
-| 19 | Ask the Desk and What-If | NOT STARTED |
-| 20 | Delegation, master data, corrections, notices | NOT STARTED |
-| 21 | Stress-test and red-team | NOT STARTED |
-| 22 | UI screens 1 to 4 | NOT STARTED |
-| 23 | UI screens 5 and 6 | NOT STARTED |
-| 24 | UI screens 7 and 8 | NOT STARTED |
-| 25 | Add-on and micro UI panels | NOT STARTED |
-| 26 | Voice and operator phone view | NOT STARTED |
-| 27 | Full acceptance suite | NOT STARTED |
-| 28 | Hardening and review | NOT STARTED |
-| 29 | Demo readiness | NOT STARTED |
-| 30 | Final audit | NOT STARTED |
+| 5 | Import pipeline and Belief-ETA reconciler | NOT STARTED |
+| 6 | Voice and text ingestion, impact engine and risk bands | NOT STARTED |
+| 7 | Solver service and recovery plan generation | NOT STARTED |
+| 8 | Proof checker, Decision Contract and governed approvals | NOT STARTED |
+| 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | NOT STARTED |
+| 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | NOT STARTED |
+| 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | NOT STARTED |
+| 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | NOT STARTED |
+| 13 | Frontend shell, design system and screens 1 to 4 | NOT STARTED |
+| 14 | Screens 5 and 6, notification drawer, Ask drawer, network map and add-on panels | NOT STARTED |
+| 15 | Screens 7 and 8, voice in the browser and operator phone view | NOT STARTED |
+| 16 | Full acceptance suite | NOT STARTED |
+| 17 | Hardening, full-repo review and demo readiness | NOT STARTED |
+| 18 | Final audit | NOT STARTED |
+
+---
+
+## OLD TO NEW STEP MAP
+
+old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 and 13 are new 8; old 14 and 15 are new 9; old 16 and 17 are new 10; old 18 and 20 are new 11; old 19 and 21 are new 12; old 5 and 22 are new 13; old 23 and 25 are new 14; old 24 and 26 are new 15; old 27 is new 16; old 28 and 29 are new 17; old 30 is new 18.
 
 ---
 
@@ -105,7 +99,11 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 
 ## NEXT STEP
 
-**Step 5 — Frontend shell and design system (or Step 5 of Prompt Pack Steps 5-18)**
+**Step 5 — Import pipeline and Belief-ETA reconciler**
+- Target Model: OPUS 4.6
+- Deliverables:
+  - Part A: Import pipeline (M1, B11) with multipart upload, Zod validation, edit-distance suggestions, quarantine handling, natural key deduplication and conflict detection.
+  - Part B: Belief-ETA reconciler and carrier webhook (M2) with multi-source trust tiers, trust-based ETA overrides, and shipment event logging.
 
 ---
 
@@ -122,18 +120,18 @@ None.
 | Command | What it does |
 |---------|-------------|
 | `git log --oneline -15` | View recent commits |
-| `npm run test` | Run all tests (50 Vitest + 1 Pytest) |
+| `npm run test` | Run all tests (97 Vitest + 1 Pytest) |
 | `npm run scan:placeholders` | Scan for forbidden placeholder strings |
 | `npm run db:start` | Start local MongoDB replica set |
 | `npm run db:seed` | Seed demo data |
 | `npm run db:reset` | Reset to clean demo state |
 | `npm run dev` | Start api + web + solver together |
-| `npm run acceptance` | Run all 41 acceptance tests (configured in Step 27) |
-| `npm run redteam` | Run red-team security suite (configured in Step 21) |
-| `npm run stress` | Run stress injector suite (configured in Step 21) |
-| `npm run demo:reset` | Full demo reset to scenario-ready state (configured in Step 29) |
-| `npm run demo:warm` | Warm LLM cache for demo (configured in Step 29) |
-| `npm run metrics` | Print governance/penalty metrics (configured in Step 29) |
+| `npm run acceptance` | Run all 41 acceptance tests (configured in Step 16) |
+| `npm run redteam` | Run red-team security suite (configured in Step 12) |
+| `npm run stress` | Run stress injector suite (configured in Step 12) |
+| `npm run demo:reset` | Full demo reset to scenario-ready state (configured in Step 17) |
+| `npm run demo:warm` | Warm LLM cache for demo (configured in Step 17) |
+| `npm run metrics` | Print governance/penalty metrics (configured in Step 17) |
 
 ---
 

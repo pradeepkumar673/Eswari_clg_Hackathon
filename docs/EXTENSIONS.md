@@ -13,7 +13,7 @@ _Authoritative Extension Integration Guide — Updated 2026-10-30_
 - Antigravity Skill integration: Full skill suite with reference guides for audit, polish, clarify, distill, layout, and contrast.
 
 **Our Step Routine:**
-1. **Design-Brief Setup (Step 5):** Run Impeccable init/brief routine and create `docs/DESIGN.md`.
+1. **Design-Brief Setup (Step 13):** Run Impeccable init/brief routine and create `docs/DESIGN.md`.
 2. **Frontend Build (Steps 5, 22–26):** Execute UI design against the established design brief.
 3. **Impeccable Audit Pass:** Run `& ".agent/skills/impeccable/scripts/bin/windows-x64/impeccable.exe" detect apps/web` before closing every UI step and fix all findings.
 
