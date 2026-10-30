@@ -8,7 +8,7 @@ _Last updated: 2026-10-30 by Step 0 (Brain)_
 
 | Step | Title | Status |
 |------|-------|--------|
-| 0 | Brain | IN PROGRESS |
+| 0 | Brain | **STEP 0: PASS** |
 | 1 | Scaffold and Mongo replica set | NOT STARTED |
 | 2 | Data model and security roles | NOT STARTED |
 | 3 | Seed data | NOT STARTED |
@@ -44,15 +44,7 @@ _Last updated: 2026-10-30 by Step 0 (Brain)_
 
 ## IN PROGRESS
 
-**Step 0 — Brain**
-
-Sub-tasks:
-- [x] git repo initialised
-- [x] docs/BLUEPRINT.md confirmed present (copied from root)
-- [x] docs/RULES.md created
-- [x] docs/STATE.md created (this file)
-- [x] Extension discovery complete → docs/EXTENSIONS.md created
-- [ ] git commit "step 0: project brain" — pending
+**Step 1 — Scaffold and Mongo replica set** (NOT STARTED — begin next)
 
 ---
 
