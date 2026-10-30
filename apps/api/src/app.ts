@@ -40,11 +40,13 @@ import { investigationRouter } from './routes/investigation.js';
 import { warehousesRouter } from './routes/warehouses.js';
 import { incidentsLiveRouter } from './routes/incidentsLive.js';
 import { initNotificationSubscribers } from './services/notifications.js';
+import { initLiveQueues } from './services/liveQueues.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
 
-// Initialize domain bus event subscribers for notifications
+// Initialize domain bus event subscribers for notifications & live queues
 initNotificationSubscribers();
+initLiveQueues();
 
 export const app = express();
 

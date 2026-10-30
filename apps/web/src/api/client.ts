@@ -413,10 +413,17 @@ export const api = {
   tracking: {
     getTrucks: () => apiRequest<any[]>('/tracking/trucks'),
     getPositions: () => apiRequest<any[]>('/tracking/positions'),
-    getReroutes: (status?: string) => apiRequest<any[]>(`/tracking/reroutes${status ? `?status=${status}` : ''}`),
-    approveReroute: (id: string, notes?: string) =>
-      apiRequest<any>(`/tracking/reroutes/${id}/approve`, { method: 'POST', body: JSON.stringify({ notes }) }),
-    rejectReroute: (id: string, notes?: string) =>
-      apiRequest<any>(`/tracking/reroutes/${id}/reject`, { method: 'POST', body: JSON.stringify({ notes }) }),
+    getReroutes: (status?: string) =>
+      apiRequest<{ proposals: any[] }>(`/reroutes${status ? `?status=${status}` : ''}`).then((r) => r.proposals ?? []),
+    approveReroute: (proposalId: string, notes?: string) =>
+      apiRequest<any>(`/reroutes/${proposalId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ notes: notes ?? '' }),
+      }),
+    rejectReroute: (proposalId: string, reason: string) =>
+      apiRequest<any>(`/reroutes/${proposalId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
   },
 };

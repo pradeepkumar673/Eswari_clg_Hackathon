@@ -26,7 +26,6 @@ import {
   Camera,
   FileCheck,
   CheckCircle2,
-  AlertTriangle,
   ArrowRight,
   Warehouse,
   Truck,
@@ -34,17 +33,13 @@ import {
 import { CockpitScreen } from './CockpitScreen.js';
 import { DriverScreen } from './DriverScreen.js';
 import { ClaimsScreen } from './ClaimsScreen.js';
+import { ManagerWorkspace } from './ManagerWorkspace.js';
 
 export function RoleHomeScreen() {
   const navigate = useNavigate();
   const currentUser = getStoredUser();
   const role = currentUser?.role || 'Analyst';
   const whCode = resolveWarehouseCode(currentUser);
-
-  // State for Manager Home View
-  const [approvals, setApprovals] = useState<any[]>([]);
-  const [reroutes, setReroutes] = useState<any[]>([]);
-  const [capacityOverview, setCapacityOverview] = useState<any>(null);
 
   // State for Analyst Home View
   const [hotspots, setHotspots] = useState<any[]>([]);
@@ -59,17 +54,7 @@ export function RoleHomeScreen() {
   const [procClaims, setProcClaims] = useState<any[]>([]);
 
   useEffect(() => {
-    if (role === 'Manager') {
-      Promise.all([
-        api.approvals.getQueue().catch(() => []),
-        api.tracking.getReroutes('PENDING').catch(() => []),
-        api.capacity.getOverview(whCode).catch(() => null),
-      ]).then(([appr, rts, cap]) => {
-        setApprovals(pickArray(appr, 'queue'));
-        setReroutes(pickArray(rts, 'proposals'));
-        setCapacityOverview(cap);
-      });
-    } else if (role === 'Analyst') {
+    if (role === 'Analyst') {
       Promise.all([
         api.cctv.getHotspots().catch(() => []),
         api.tracking.getTrucks().catch(() => []),
@@ -92,21 +77,6 @@ export function RoleHomeScreen() {
       });
     }
   }, [role, whCode]);
-
-  // Handler for Manager Reroute Approval
-  const handleDecideReroute = async (proposalId: string, approve: boolean) => {
-    try {
-      if (approve) {
-        await api.tracking.approveReroute(proposalId, 'Approved by Supply Chain Manager');
-      } else {
-        await api.tracking.rejectReroute(proposalId, 'Rejected by Supply Chain Manager');
-      }
-      const updated = await api.tracking.getReroutes('PENDING');
-      setReroutes(pickArray(updated, 'proposals'));
-    } catch (err: any) {
-      alert(`Decision failed: ${err.message}`);
-    }
-  };
 
   // Handler for Operator CCTV Confirm & Link
   const handleConfirmCctvEvent = async (eventId: string, shipmentId?: string) => {
@@ -166,152 +136,11 @@ export function RoleHomeScreen() {
           </div>
         </div>
 
-        {/* 3-Column Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Card 1: Driver Reroute Proposals */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-slate-900 text-sm">Truck Reroute Proposals</h3>
-              </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
-                {reroutes.length} Pending
-              </span>
-            </div>
-
-            {reroutes.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-400">
-                No driver reroute proposals awaiting decision.
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-                {reroutes.map((r: any) => (
-                  <div key={r.proposal_id || r._id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-slate-900">
-                      <span>{r.truck_id} ({r.proposal_id})</span>
-                      <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                        +{r.additional_km || 0} km
-                      </span>
-                    </div>
-                    <div className="text-slate-600">
-                      Proposed: <strong>{r.proposed_warehouse_id}</strong> (from {r.original_warehouse_id})
-                    </div>
-                    {r.reason && <div className="text-slate-500 italic">"{r.reason}"</div>}
-                    <div className="flex gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 text-xs py-1"
-                        onClick={() => handleDecideReroute(r.proposal_id || r._id, true)}
-                      >
-                        Approve Reroute
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-rose-300 text-rose-700 hover:bg-rose-50 flex-1 text-xs py-1"
-                        onClick={() => handleDecideReroute(r.proposal_id || r._id, false)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Card 2: Pending Plan Approvals */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <FileCheck className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-slate-900 text-sm">Recovery Plan Queue</h3>
-              </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700">
-                {approvals.length} Awaiting
-              </span>
-            </div>
-
-            {approvals.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-400">
-                All recovery plans approved or executed.
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-                {approvals.slice(0, 4).map((p: any) => (
-                  <div key={p._id || p.plan_id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between font-bold text-slate-900">
-                      <span>{p.plan_id || 'Plan'}</span>
-                      <span className="font-mono text-indigo-700">v{p.version || 1}</span>
-                    </div>
-                    <div className="text-slate-600">Disruption: {p.disruption_id}</div>
-                    <div className="text-slate-500">Actions: {p.actions?.length || 0} planned</div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full mt-1 text-indigo-600 text-xs py-1"
-                      onClick={() => navigate('/approvals')}
-                    >
-                      Review & Authorize
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Card 3: Warehouse Capacity Rollup */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Warehouse className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-slate-900 text-sm">Zone Capacity Rollup</h3>
-              </div>
-              <span className="text-xs font-mono text-slate-500">WH-HOS</span>
-            </div>
-
-            {capacityOverview ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500">Occupied Slots</div>
-                    <div className="text-xl font-bold text-slate-900 mt-1">
-                      {capacityOverview.total_occupied_slots}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500">Planned Inbound</div>
-                    <div className="text-xl font-bold text-amber-700 mt-1">
-                      {capacityOverview.total_reserved_inbound_slots}
-                    </div>
-                  </div>
-                </div>
-
-                {capacityOverview.red_zones && capacityOverview.red_zones.length > 0 && (
-                  <div className="p-3 bg-rose-50 border border-rose-300 rounded-lg text-xs space-y-1">
-                    <div className="font-bold text-rose-800 flex items-center gap-1">
-                      <AlertTriangle className="w-4 h-4 text-rose-600" />
-                      {capacityOverview.red_zones.length} Zone Over Capacity
-                    </div>
-                    <div className="text-rose-700">{capacityOverview.red_zones[0].explanation}</div>
-                  </div>
-                )}
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate('/capacity')}
-                >
-                  Open Capacity Mapper Map
-                </Button>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-xs text-slate-400">Loading capacity metrics...</div>
-            )}
-          </div>
-        </div>
+        {/* Supply Chain Manager Workspace: Reroutes, Approvals Queue, Multi-Warehouse Capacity, Active Breakdowns */}
+        <ManagerWorkspace
+          onOpenCapacity={() => navigate('/capacity')}
+          onOpenApprovals={() => navigate('/approvals')}
+        />
       </div>
     );
   }
