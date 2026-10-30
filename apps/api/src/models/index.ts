@@ -58,6 +58,7 @@ export * from './approval-delegations.js';
 export * from './simulation-runs.js';
 export * from './customer-notices.js';
 export * from './settings.js';
+export * from './chain-state.js';
 
 // Import references for ensureIndexes
 import { User } from './users.js';
@@ -112,6 +113,7 @@ import { ApprovalDelegation } from './approval-delegations.js';
 import { SimulationRun } from './simulation-runs.js';
 import { CustomerNotice } from './customer-notices.js';
 import { Setting } from './settings.js';
+import { ChainState } from './chain-state.js';
 
 const ALL_MODELS = [
   User,
@@ -162,6 +164,7 @@ const ALL_MODELS = [
   SimulationRun,
   CustomerNotice,
   Setting,
+  ChainState,
 ];
 
 /**

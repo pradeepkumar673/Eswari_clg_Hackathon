@@ -3,6 +3,7 @@ import { z } from 'zod';
 export * from './schemas/core.js';
 export * from './schemas/events.js';
 export * from './schemas/recovery.js';
+export * from './permissions.js';
 
 export const HealthResponseSchema = z.object({
   status: z.enum(['ok', 'degraded', 'error']),

@@ -12,7 +12,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 1 | Scaffold and Mongo replica set | **STEP 1: PASS** |
 | 2 | Data model and security roles | **STEP 2: PASS** |
 | 3 | Seed data | **STEP 3: PASS** |
-| 4 | Auth, RBAC, audit hash chain | NOT STARTED |
+| 4 | Auth, RBAC, audit hash chain | **STEP 4: PASS** |
 | 5 | Frontend shell and design system | NOT STARTED |
 | 6 | Import pipeline | NOT STARTED |
 | 7 | Reconciler and webhook | NOT STARTED |
@@ -82,20 +82,30 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
   - 28 automated tests in `apps/api/test/step3-seed.test.ts` verifying idempotency, blueprint counts, stock arithmetic, and supplier on-time ratings.
   - Monorepo full suite: 50 Vitest tests + 1 Pytest test passing cleanly.
 
+### Step 4 — Auth, RBAC, audit service with hash chain (PASS)
+- **Role & Capability Matrix**: `packages/shared/src/permissions.ts` defining 31 granular permissions across all 5 roles (`Supply_Chain_Analyst`, `Supply_Chain_Manager`, `Warehouse_Operator`, `Procurement_Approver`, `Administrator`), with warehouse-scoped authorization for Warehouse Operators.
+- **Authentication Routes**:
+  - `POST /auth/login`: bcrypt verification + signed JWT with role claim.
+  - `GET /auth/me`: returns authenticated user profile and derived permission list.
+  - `POST /auth/demo-switch`: fast role-switching across all seeded demo users when `DEMO_MODE=true`.
+  - Webhook Auth: `POST /webhooks/carrier/:source` with constant-time HMAC-SHA256 signature verification.
+- **Audit Service with Serialized Hash Chain**:
+  - `apps/api/src/services/audit.ts` maintaining gapless `seq`, `prev_hash`, `row_hash = SHA-256(prev_hash + canonicalJSON(row))` serialized via `ChainState` document update inside MongoDB transactions with exponential jittered backoff.
+  - `writeAudit()` and `writeLedgerEntry()` recording operations to append-only collections.
+  - `verifyChain(collection)`: scans in `seq` order, recomputes hashes, returns `{ ok, checked, firstBrokenRowId }`.
+  - Endpoints: `GET /audit/verify`, `GET /audit` (with filtering and pagination), `POST /admin/demo/tamper` (admin mutation bypassing hashing for demo verification).
+- **Security Middlewares & Guardrails**:
+  - `apps/api/src/middleware/auth.ts`: `authenticateToken`, `requirePermission`, warehouse scoping checks, and automated `ACCESS_DENIED` audit logging.
+  - `apps/api/src/middleware/routeCheck.ts`: `verifyRoutePermissions(app)` boot check ensuring zero untracked non-public routes.
+- **Tests**:
+  - 47 automated tests in `apps/api/test/step4-auth-rbac-audit.test.ts`.
+  - Monorepo full suite: 97 Vitest tests + 1 Pytest test passing cleanly.
+
 ---
 
 ## NEXT STEP
 
-**Step 4 — Auth, RBAC, audit service with hash chain**
-- Target Model: OPUS 4.6
-- Deliverables:
-  - `POST /auth/login` (bcrypt + JWT with role claim), `GET /auth/me` returning role and full permission list derived from `packages/shared/src/permissions.ts`.
-  - `POST /auth/demo-switch` (DEMO_MODE only) returning JWT for any seeded user.
-  - Webhook auth: HMAC of body with `WEBHOOK_SECRET` (constant-time compare).
-  - Audit service `apps/api/src/services/audit.ts`: `writeAudit` and `writeLedgerEntry` maintaining gapless serialized SHA-256 hash chains (`prev_hash`, `row_hash`, `seq`).
-  - `verifyChain(collection)`: scans chain in seq order, returning `{ ok, checked, firstBrokenRowId }`.
-  - `GET /audit/verify`, `GET /audit` with filters, and `POST /admin/demo/tamper` (Admin, DEMO_MODE only).
-  - `requirePermission` middleware and route self-check that fails server boot if any non-public route lacks a permission tag.
+**Step 5 — Frontend shell and design system (or Step 5 of Prompt Pack Steps 5-18)**
 
 ---
 

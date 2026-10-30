@@ -3,7 +3,7 @@ import { logger } from '../logger.js';
 
 /**
  * Executes `fn` inside a MongoDB multi-document transaction with automatic
- * retry on TransientTransactionError (up to `maxRetries`).
+ * retry on TransientTransactionError and write conflicts (up to `maxRetries`).
  *
  * LOCK-ORDER RULE: When modifying inventory_balances inside a transaction,
  * always sort operations by (warehouse_id, sku_id) ascending BEFORE issuing
@@ -19,7 +19,7 @@ import { logger } from '../logger.js';
  */
 export async function withTransaction<T>(
   fn: (session: ClientSession) => Promise<T>,
-  maxRetries = 3
+  maxRetries = 25,
 ): Promise<T> {
   const session = await mongoose.startSession();
   try {
@@ -29,7 +29,7 @@ export async function withTransaction<T>(
         session.startTransaction({
           readConcern: { level: 'snapshot' },
           writeConcern: { w: 'majority' },
-          readPreference: 'primary'
+          readPreference: 'primary',
         });
 
         const result = await fn(session);
@@ -40,29 +40,32 @@ export async function withTransaction<T>(
         lastError = err;
         // Abort the transaction if it is still in progress
         if (session.inTransaction()) {
-          await session.abortTransaction();
+          try {
+            await session.abortTransaction();
+          } catch {
+            // Ignore abort error
+          }
         }
 
-        // Retry only on transient errors
-        if (
-          err.hasErrorLabel &&
-          err.hasErrorLabel('TransientTransactionError') &&
-          attempt < maxRetries - 1
-        ) {
-          logger.warn(
-            { attempt: attempt + 1, maxRetries },
-            'TransientTransactionError — retrying transaction'
-          );
+        const isTransient =
+          (typeof err.hasErrorLabel === 'function' &&
+            err.hasErrorLabel('TransientTransactionError')) ||
+          err.code === 112 ||
+          (typeof err.message === 'string' && err.message.includes('Write conflict'));
+
+        if (isTransient && attempt < maxRetries - 1) {
+          // Jittered backoff to avoid thundering herd on write conflict
+          const jitter = Math.floor(Math.random() * 25) + 10;
+          const delay = Math.min(300, 10 * Math.pow(1.3, attempt) + jitter);
+          await new Promise((r) => setTimeout(r, delay));
           continue;
         }
 
         throw err;
       }
     }
-    // Should never reach here, but satisfy TypeScript
     throw lastError;
   } finally {
     await session.endSession();
   }
 }
-
