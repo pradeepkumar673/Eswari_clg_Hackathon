@@ -271,6 +271,12 @@ export const api = {
   },
 
   // Master Data & Network
+  incidents: {
+    active: () => apiRequest<{ incidents: any[] }>('/incidents/active'),
+    clear: (incidentId: string) =>
+      apiRequest<any>(`/incidents/${incidentId}/clear`, { method: 'POST' }),
+  },
+
   warehouses: {
     list: () => apiRequest<any[]>('/warehouses'),
     create: (body: {

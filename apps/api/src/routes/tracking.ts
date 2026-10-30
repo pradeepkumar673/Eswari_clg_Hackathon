@@ -26,6 +26,7 @@ import {
 import { config } from '../config.js';
 import { matchAssistResponders } from '../services/assistMatcher.js';
 import { distanceKmPrecise } from '../services/gpsFix.js';
+import { announceIncident, toIncidentView } from '../services/incidentFeed.js';
 
 export const trackingRouter = Router();
 
@@ -302,81 +303,81 @@ trackingRouter.post(
   requirePermission('driver.incident'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const user = req.user!;
+      const user: any = req.user!;
       const driverId = user.driver_id || 'DRV-1';
       const truckId = user.truck_id || 'SHP-204';
+      const driverName: string = user.display_name || user.username || driverId;
 
-      const { kind, idempotency_key, ts } = req.body;
+      const { kind, idempotency_key, ts, gps } = req.body;
       if (!kind || !idempotency_key) {
-        res.status(400).json({
-          error: 'Bad Request',
-          message: 'kind and idempotency_key are required',
-        });
+        res.status(400).json({ error: 'Bad Request', message: 'kind and idempotency_key are required' });
         return;
       }
-
-      // Driver scoping
+      if (!['BREAKDOWN', 'ACCIDENT', 'DELAY_OTHER'].includes(kind)) {
+        res.status(400).json({ error: 'Bad Request', message: `Unknown incident kind ${kind}` });
+        return;
+      }
       if (req.body.truck_id && req.body.truck_id !== truckId) {
-        res.status(403).json({
-          error: 'Forbidden',
-          message: 'Cannot report incident for another truck',
-        });
+        res.status(403).json({ error: 'Forbidden', message: 'Cannot report incident for another truck' });
         return;
       }
 
-      // Idempotency check
-      const existing = await DriverIncident.findOne({
-        driver_id: driverId,
-        idempotency_key,
-      });
-
+      // Idempotency: a repeated tap returns the original incident
+      const existing = await DriverIncident.findOne({ driver_id: driverId, idempotency_key });
       if (existing) {
-        const existingProp = await RerouteProposal.findOne({
-          reason: { $regex: idempotency_key },
-        });
+        const existingProp = await RerouteProposal.findOne({ reason: { $regex: idempotency_key } });
         res.status(200).json({ incident: existing, proposal: existingProp });
         return;
       }
 
+      // 1. Record the live GPS fix sent with the report, so the position is the moment of the press
+      if (gps && Number.isFinite(gps.lat) && Number.isFinite(gps.lng)) {
+        const last: any = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+        await intakeDriverPings(driverId, truckId, [
+          {
+            seq: (last?.seq ?? 0) + 1,
+            ts: gps.ts ?? new Date(),
+            lat: gps.lat,
+            lng: gps.lng,
+            speed_kmh: 0,
+            accuracy_m: gps.accuracy_m ?? null,
+            source: 'DRIVER_DEVICE',
+          } as any,
+        ]);
+      }
+      const fresh: any = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+
+      // 2. Destination for context on the map and in the notification
+      const shipment: any = await Shipment.findOne({ code: truckId }).lean();
+      const dest: any = shipment ? await Warehouse.findById(shipment.warehouse_id).lean() : null;
+
       const incidentId = `INC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const incident = await DriverIncident.create({
+      const incident: any = await DriverIncident.create({
         incident_id: incidentId,
         driver_id: driverId,
+        driver_name: driverName,
         truck_id: truckId,
         kind,
         ts: ts ? new Date(ts) : new Date(),
         status: 'REPORTED',
+        lat: fresh?.lat ?? null,
+        lng: fresh?.lng ?? null,
+        accuracy_m: fresh?.accuracy_m ?? null,
+        warehouse_id: shipment ? String(shipment.warehouse_id) : null,
+        destination_code: dest?.code ?? null,
+        proposal_id: null,
         idempotency_key,
         created_at: new Date(),
       });
 
-      // accept the device fix sent by the new DriverScreen
-      if (req.body.gps && Number.isFinite(req.body.gps.lat) && Number.isFinite(req.body.gps.lng)) {
-        const last = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
-        await intakeDriverPings(driverId, truckId, [{
-          seq: (last?.seq ?? 0) + 1,
-          ts: req.body.gps.ts ?? new Date(),
-          lat: req.body.gps.lat,
-          lng: req.body.gps.lng,
-          speed_kmh: 0,
-          accuracy_m: req.body.gps.accuracy_m ?? null,
-          source: 'DRIVER_DEVICE',
-        } as any]);
-      }
-
+      // 3. Reroute proposal and assist matching for breakdowns and accidents
       let proposal: any = null;
-
-      // BREAKDOWN or ACCIDENT creates one PENDING proposal with nearest warehouse
       if (kind === 'BREAKDOWN' || kind === 'ACCIDENT') {
-        const latestPing = await DriverPing.findOne({ driver_id: driverId })
-          .sort({ seq: -1 })
-          .lean();
-
         const nearest = await findNearestWarehouse({
-          lane_id: latestPing?.lane_id,
-          km_on_lane: latestPing?.km_on_lane,
-          lat: latestPing?.lat ?? 12.7409,
-          lng: latestPing?.lng ?? 77.8253,
+          lane_id: fresh?.lane_id,
+          km_on_lane: fresh?.km_on_lane,
+          lat: fresh?.lat ?? 12.7409,
+          lng: fresh?.lng ?? 77.8253,
         });
 
         const proposalId = `PROP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -384,11 +385,11 @@ trackingRouter.post(
           proposal_id: proposalId,
           truck_id: truckId,
           from_position: {
-            seq: latestPing?.seq ?? 0,
-            lat: latestPing?.lat ?? 12.7409,
-            lng: latestPing?.lng ?? 77.8253,
-            lane_id: latestPing?.lane_id ?? null,
-            km_on_lane: latestPing?.km_on_lane ?? null,
+            seq: fresh?.seq ?? 0,
+            lat: fresh?.lat ?? 12.7409,
+            lng: fresh?.lng ?? 77.8253,
+            lane_id: fresh?.lane_id ?? null,
+            km_on_lane: fresh?.km_on_lane ?? null,
           },
           nearest_warehouse_id: nearest.nearest_warehouse_code,
           road_km: nearest.road_km,
@@ -400,35 +401,37 @@ trackingRouter.post(
           created_at: new Date(),
         });
 
-        // Notify managers
+        await DriverIncident.updateOne({ incident_id: incidentId }, { $set: { proposal_id: proposalId } });
+
         await broadcastToTopic('alerts', {
           type: 'REROUTE_PROPOSED',
-          proposal_id: proposal.proposal_id,
+          proposal_id: proposalId,
           truck_id: truckId,
           nearest_warehouse_id: nearest.nearest_warehouse_code,
           road_km: nearest.road_km,
         });
 
-        const fresh = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
         if (fresh) {
           await matchAssistResponders(
-            { incident_id: incidentId, kind, truck_id: truckId, driver_id: driverId, driver_name: user.display_name },
+            { incident_id: incidentId, kind, truck_id: truckId, driver_id: driverId, driver_name: driverName },
             { lat: fresh.lat, lng: fresh.lng, ts: fresh.ts },
           );
         }
       }
 
+      // 4. Live map for everyone, and the bell for managers and admins
+      await announceIncident(
+        toIncidentView({ ...incident.toObject(), proposal_id: proposal?.proposal_id ?? null }),
+      );
+
       res.status(201).json({ incident, proposal });
     } catch (err: any) {
       if (err.code === 11000) {
-        // Concurrent duplicate idempotency key
         const existing = await DriverIncident.findOne({
-          driver_id: req.user!.driver_id || 'DRV-1',
+          driver_id: (req.user as any)?.driver_id || 'DRV-1',
           idempotency_key: req.body.idempotency_key,
         });
-        const existingProp = await RerouteProposal.findOne({
-          reason: { $regex: req.body.idempotency_key },
-        });
+        const existingProp = await RerouteProposal.findOne({ reason: { $regex: req.body.idempotency_key } });
         res.status(200).json({ incident: existing, proposal: existingProp });
         return;
       }

@@ -26,6 +26,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { UserProfile, api, clearAuth } from '../api/client.js';
+import { useIncidents } from '../hooks/useIncidents.js';
 import { Button, Drawer } from './components.js';
 import {
   ShieldCheck,
@@ -91,6 +92,7 @@ export function Layout({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  useIncidents();
 
   const visibleScreens = SCREENS.filter(
     (s) => s.allowedRoles.includes('*') || (user && s.allowedRoles.includes(user.role)),
@@ -141,9 +143,12 @@ export function Layout({
     };
     loadNotifs();
     const interval = setInterval(loadNotifs, 15000);
+    const onRefresh = () => loadNotifs();
+    window.addEventListener('notifications:refresh', onRefresh);
     return () => {
       mounted = false;
       clearInterval(interval);
+      window.removeEventListener('notifications:refresh', onRefresh);
     };
   }, [user?.id]);
 

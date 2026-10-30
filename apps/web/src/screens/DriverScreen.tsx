@@ -29,6 +29,7 @@ import { startGpsWatch, haversineKm, GpsFix } from '../services/gpsWatcher.js';
 import { DriverMap, AssistMapItem } from '../ui/DriverMap.js';
 import { DelayReportCard } from '../ui/DelayReportCard.js';
 import { openGoogleMaps } from '../lib/navigation.js';
+import { useIncidents } from '../hooks/useIncidents.js';
 
 const MIN_MOVE_M = 20;
 const MAX_PING_INTERVAL_MS = 15000;
@@ -70,6 +71,7 @@ export function DriverScreen() {
   const user = getStoredUser();
   const truckId = user?.truck_id || '';
   const driverId = user?.driver_id || '';
+  const { incidents: networkIncidents, clear: clearIncident } = useIncidents();
 
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [pendingCount, setPendingCount] = useState<number>(0);
@@ -469,6 +471,35 @@ export function DriverScreen() {
           <button onClick={() => setStatusMessage(null)} className="text-indigo-500 hover:text-indigo-800">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {networkIncidents.length > 0 && (
+        <div className="bg-white border border-rose-200 rounded-2xl p-5 shadow-sm space-y-3">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600" /> Breakdowns on the network
+          </h2>
+          {networkIncidents.map((i) => {
+            const km =
+              fix && i.lat != null && i.lng != null ? haversineKm(fix.lat, fix.lng, i.lat, i.lng).toFixed(1) : null;
+            return (
+              <div key={i.incident_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  <b>{i.driver_name ?? i.driver_id}</b> • {i.truck_id} • {i.kind.toLowerCase()} at{' '}
+                  {new Date(i.ts).toLocaleTimeString()}
+                  {km != null ? ` • ${km} km from you` : ''}
+                </span>
+                {i.truck_id === truckId && (
+                  <button
+                    onClick={() => clearIncident(i.incident_id)}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                  >
+                    Mark my breakdown cleared
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

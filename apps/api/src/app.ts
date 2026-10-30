@@ -38,6 +38,7 @@ import { cctvRouter } from './routes/cctv.js';
 import { zonesRouter } from './routes/zones.js';
 import { investigationRouter } from './routes/investigation.js';
 import { warehousesRouter } from './routes/warehouses.js';
+import { incidentsLiveRouter } from './routes/incidentsLive.js';
 import { initNotificationSubscribers } from './services/notifications.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
@@ -231,6 +232,9 @@ app.use('/capacity', zonesRouter);
 
 app.use('/api/v1', warehousesRouter);
 app.use('/', warehousesRouter);
+
+app.use('/api/v1', incidentsLiveRouter);
+app.use('/', incidentsLiveRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();
