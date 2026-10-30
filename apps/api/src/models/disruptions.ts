@@ -10,6 +10,9 @@ export interface IDisruption extends Document {
   detected_at: Date;
   resolved_at: Date | null;
   created_by_event_id: mongoose.Types.ObjectId;
+  calendar_tag: string | null;
+  correlation_id: string | null;
+  status: 'OPEN' | 'IN_RECOVERY' | 'RESOLVED';
 }
 
 const DisruptionSchema = new Schema<IDisruption>(
@@ -22,7 +25,15 @@ const DisruptionSchema = new Schema<IDisruption>(
     disruption_type: {
       type: String,
       required: true,
-      enum: ['DELAY', 'DAMAGE', 'PARTIAL_LOSS', 'FULL_LOSS'],
+      enum: [
+        'DELAY',
+        'DAMAGE',
+        'PARTIAL_LOSS',
+        'FULL_LOSS',
+        'LATE_SHIPMENT',
+        'SUPPLIER_DELAY',
+        'STOCK_SHORTAGE',
+      ],
     },
     severity: {
       type: String,
@@ -53,6 +64,20 @@ const DisruptionSchema = new Schema<IDisruption>(
       type: Schema.Types.ObjectId,
       ref: 'ShipmentEvent',
       required: true,
+    },
+    calendar_tag: {
+      type: String,
+      default: null,
+    },
+    correlation_id: {
+      type: String,
+      default: null,
+    },
+    status: {
+      type: String,
+      required: true,
+      enum: ['OPEN', 'IN_RECOVERY', 'RESOLVED'],
+      default: 'OPEN',
     },
   },
   { collection: 'disruptions' }

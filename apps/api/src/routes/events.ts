@@ -11,11 +11,134 @@ import mongoose from 'mongoose';
 import { authenticateToken, requirePermission } from '../middleware/auth.js';
 import { ShipmentEvent } from '../models/shipment-events.js';
 import { Shipment } from '../models/shipments.js';
+import { Warehouse } from '../models/warehouses.js';
+import { FieldReport } from '../models/field-reports.js';
 import { writeAudit } from '../services/audit.js';
 import { domainBus } from '../services/bus.js';
 import { withTransaction } from '../db/withTransaction.js';
+import { reconcile, IncomingEvent } from '../services/reconciler.js';
+import { simClock } from '../services/simClock.js';
 
 export const eventsRouter = Router();
+
+/**
+ * POST /events
+ * Human confirmation of an event card (possibly edited).
+ * Passes event to reconciler with source FIELD_REPORT or EMAIL_TEXT.
+ * Enforces warehouse operator scoping (Operator cannot confirm for another warehouse -> 403).
+ */
+eventsRouter.post(
+  '/',
+  authenticateToken,
+  requirePermission('confirm_events'),
+  async (req: Request, res: Response): Promise<void> => {
+    const {
+      field_report_id,
+      shipment_code,
+      warehouse_code,
+      event_type = 'DAMAGE_REPORT',
+      damaged_units,
+      delay_hours,
+      reported_eta,
+    } = req.body as {
+      field_report_id?: string;
+      shipment_code?: string;
+      warehouse_code?: string;
+      event_type?: string;
+      damaged_units?: number | null;
+      delay_hours?: number | null;
+      reported_eta?: string;
+    };
+
+    if (!shipment_code) {
+      res.status(400).json({ error: 'Bad Request', message: 'shipment_code is required' });
+      return;
+    }
+
+    const shipment = await Shipment.findOne({ code: shipment_code });
+
+    // Warehouse scoping check for Warehouse_Operator
+    if (req.user?.role === 'Warehouse_Operator') {
+      let targetWhId = shipment?.warehouse_id;
+      if (!targetWhId && warehouse_code) {
+        const wh = await Warehouse.findOne({ code: warehouse_code }).lean();
+        if (wh) targetWhId = wh._id;
+      }
+      if (targetWhId && String(req.user.warehouse_id) !== String(targetWhId)) {
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'Warehouse Operator cannot confirm events for another warehouse',
+        });
+        return;
+      }
+    }
+
+    let fieldReport: any = null;
+    if (field_report_id && mongoose.Types.ObjectId.isValid(field_report_id)) {
+      fieldReport = await FieldReport.findById(field_report_id);
+    }
+
+    const source = fieldReport?.channel === 'VOICE' ? 'FIELD_REPORT' : 'EMAIL_TEXT';
+    const extId = field_report_id ? `FR-${field_report_id}` : `EVT-CONFIRM-${Date.now()}`;
+    const now = await simClock.now();
+
+    // Compute reported ETA
+    let finalEta: Date | undefined;
+    if (reported_eta) {
+      finalEta = new Date(reported_eta);
+    } else if (delay_hours && delay_hours > 0 && shipment) {
+      const baseEta = shipment.resolved_eta || shipment.current_eta;
+      finalEta = new Date(baseEta.getTime() + delay_hours * 3_600_000);
+    }
+
+    // If damage reported, adjust shipment usable_quantity and mark disrupted
+    if (shipment && damaged_units && damaged_units > 0) {
+      const usable = Math.max(0, shipment.total_units - damaged_units);
+      await Shipment.updateOne(
+        { _id: shipment._id },
+        {
+          $set: {
+            usable_quantity: usable,
+            is_disrupted: true,
+          },
+        },
+      );
+    }
+
+    const incoming: IncomingEvent = {
+      source,
+      external_event_id: extId,
+      event_type,
+      shipment_code,
+      reported_eta: finalEta,
+      event_time: now,
+      quantity_affected: damaged_units ?? undefined,
+      raw_payload: req.body as Record<string, unknown>,
+      correlation_id: `confirm-${extId}`,
+    };
+
+    const reconcileResult = await withTransaction((session) => reconcile(incoming, session));
+
+    if (fieldReport) {
+      fieldReport.status = 'CONFIRMED';
+      if (reconcileResult.eventId) {
+        fieldReport.event_id = new mongoose.Types.ObjectId(reconcileResult.eventId);
+      }
+      if (shipment) {
+        fieldReport.shipment_id = shipment._id;
+      }
+      await fieldReport.save();
+    }
+
+    res.status(200).json({
+      status: reconcileResult.status,
+      eventId: reconcileResult.eventId,
+      reason: reconcileResult.reason,
+      shipment_code,
+      reconcile: reconcileResult,
+    });
+  },
+);
 
 /**
  * GET /events/conflicts

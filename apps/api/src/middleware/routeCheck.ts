@@ -20,6 +20,8 @@ export const PUBLIC_ROUTES = [
   'GET /api/v1/health',
   'POST /webhooks/carrier/:source',
   'POST /api/v1/webhooks/carrier/:source',
+  'GET /fixtures/sample-transcripts',
+  'GET /api/v1/fixtures/sample-transcripts',
 ];
 
 export interface DiscoveredRoute {

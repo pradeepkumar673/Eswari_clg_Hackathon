@@ -7,6 +7,8 @@ import { auditRouter, adminTamperRouter } from './routes/audit.js';
 import { webhookRouter } from './routes/webhooks.js';
 import { importsRouter } from './routes/imports.js';
 import { eventsRouter } from './routes/events.js';
+import { voiceRouter, textIngestRouter, fixturesRouter } from './routes/ingest.js';
+import { disruptionsRouter, riskPolicyRouter, evidenceRouter } from './routes/disruptions.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
 
@@ -75,6 +77,24 @@ app.use('/imports', importsRouter);
 
 app.use('/api/v1/events', eventsRouter);
 app.use('/events', eventsRouter);
+
+app.use('/api/v1/voice', voiceRouter);
+app.use('/voice', voiceRouter);
+
+app.use('/api/v1/ingest', textIngestRouter);
+app.use('/ingest', textIngestRouter);
+
+app.use('/api/v1/fixtures', fixturesRouter);
+app.use('/fixtures', fixturesRouter);
+
+app.use('/api/v1/disruptions', disruptionsRouter);
+app.use('/disruptions', disruptionsRouter);
+
+app.use('/api/v1/risk/policy', riskPolicyRouter);
+app.use('/risk/policy', riskPolicyRouter);
+
+app.use('/api/v1/evidence', evidenceRouter);
+app.use('/evidence', evidenceRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

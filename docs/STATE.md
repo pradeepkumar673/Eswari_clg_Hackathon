@@ -14,7 +14,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 3 | Seed data | **STEP 3: PASS** |
 | 4 | Auth, RBAC, audit hash chain | **STEP 4: PASS** |
 | 5 | Import pipeline and Belief-ETA reconciler | **STEP 5: PASS** |
-| 6 | Voice and text ingestion, impact engine and risk bands | NOT STARTED |
+| 6 | Voice and text ingestion, impact engine and risk bands | **STEP 6: PASS** |
 | 7 | Solver service and recovery plan generation | NOT STARTED |
 | 8 | Proof checker, Decision Contract and governed approvals | NOT STARTED |
 | 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | NOT STARTED |
@@ -113,15 +113,37 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
   - `apps/api/test/step5-reconciler.test.ts`: 6 tests passing (duplicate storm, stale event, conflict tolerance, concurrency, conflict resolution API, RBAC & bad HMAC).
   - Monorepo full suite: 106 Vitest tests + 1 Pytest test passing cleanly.
 
+### Step 6 — Voice and text ingestion, impact engine, risk bands (PASS)
+- **Part A: Field reports, voice parse, text ingestion (W1, B15)**:
+  - `apps/api/src/llm/provider.ts`: Groq LLM wrapper with input-hash caching in `llm_cache` and typed `LLMUnavailable` fallback.
+  - `apps/api/src/services/extractor.ts`: deterministic Tanglish/English rule-based extractor (handling 20+ variants, number words onnu..pathu, damage, delay, and Tamil labels).
+  - `apps/api/src/routes/ingest.ts`: `POST /voice/parse` and `POST /ingest/text` storing raw text untouched in `field_reports` with status DRAFT; `GET /fixtures/sample-transcripts`.
+  - `apps/api/src/routes/events.ts`: `POST /events` confirm flow with warehouse-scoped authorization (403 for operators confirming other warehouses), links `field_report.event_id`, updates usable stock, and passes through reconciler.
+- **Part B: Impact engine, risk waterfall, risk bands (M3, B5)**:
+  - `apps/api/src/services/impactEngine.ts`: listens to `EVENT_APPLIED` and `ETA_CHANGED` on domain bus, walks shipment -> destination warehouse -> inventory -> dependent open orders, opens/refreshes ONE disruption per shipment, and computes exact risk formula `100 * (0.35*U + 0.30*S + 0.20*D + 0.15*P)` with best/worst range and evidence row IDs.
+  - `apps/api/src/routes/disruptions.ts`: `GET /disruptions`, `GET /disruptions/:id`, `GET /disruptions/:id/impact`, `GET /disruptions/:id/risks` (dynamic re-banding), `GET /disruptions/:id/heatgrid`, `GET/PUT /risk/policy`, and `GET /evidence/:type/:id`.
+- **Tests**:
+  - `apps/api/test/step6-ingestion-impact.test.ts`: 9 automated tests passing:
+    - 20+ Tanglish and English extractor variants.
+    - Acceptance test 11 (voice path offline with sample transcript).
+    - Acceptance test 38 (sample messages: CONFLICT, DUPLICATE, REJECTED).
+    - Operator cross-warehouse scoping (403).
+    - Acceptance test 5 (Scenario A lists exactly ORD-1042, ORD-1047, ORD-1051).
+    - Hand-calculated risk scores asserted to exact blueprint arithmetic (51.67, 55.73, 68.56).
+    - Acceptance test 28 (dynamic re-banding on policy threshold change).
+    - Evidence drawer resolving real source documents.
+    - Heatgrid factor matrix.
+  - Monorepo full suite: 115 Vitest tests + 1 Pytest test passing cleanly.
+
 ---
 
 ## NEXT STEP
 
-**Step 6 — Voice and text ingestion, impact engine, risk bands (W1, B15, M3, B5)**
-- Target Model: SONNET 4.6
+**Step 7 — Solver service and recovery plan generation (M4, A2, A3, B12)**
+- Target Model: OPUS 4.6
 - Deliverables:
-  - Part A: Field reports, voice parse, text ingestion backend (W1, B15) with Groq LLM wrapper, deterministic Tanglish/English rule-based extractor fallback, draft cards, human confirmation flow.
-  - Part B: Impact engine, risk waterfall, risk bands (M3, B5) with disruption tracking, deterministic risk formula, configurable risk policies, evidence drawers, and heat-grid endpoints.
+  - Part A: services/solver (Python FastAPI + OR-Tools CP-SAT) with `POST /solve`, golden instances (Scenario A & B), brute-force verification.
+  - Part B: Candidate enumerator, recovery plan generation (`POST /disruptions/:id/recovery-plans`), trade-off ledger (`GET /plans/:id/tradeoffs`), collateral panel, recommendation cards (`GET /plans/:id/cards`).
 
 ---
 

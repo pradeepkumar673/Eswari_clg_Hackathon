@@ -2,12 +2,16 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IOrderRiskSnapshot extends Document {
   order_id: mongoose.Types.ObjectId;
+  disruption_id?: mongoose.Types.ObjectId | null;
   risk_score: number;
+  best_case_score: number;
+  worst_case_score: number;
   urgency: number;
   supply_gap: number;
   delay_factor: number;
   penalty_factor: number;
   band: string;
+  evidence_ids: Record<string, string>;
   snapshot_at: Date;
 }
 
@@ -18,11 +22,30 @@ const OrderRiskSnapshotSchema = new Schema<IOrderRiskSnapshot>(
       ref: 'Order',
       required: true,
     },
+    disruption_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'Disruption',
+      default: null,
+    },
     risk_score: {
       type: Number,
       required: true,
       min: 0,
       max: 100,
+    },
+    best_case_score: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    worst_case_score: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+      default: 0,
     },
     urgency: {
       type: Number,
@@ -52,6 +75,10 @@ const OrderRiskSnapshotSchema = new Schema<IOrderRiskSnapshot>(
       type: String,
       required: true,
       enum: ['RED', 'AMBER', 'GREEN'],
+    },
+    evidence_ids: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
     snapshot_at: {
       type: Date,
