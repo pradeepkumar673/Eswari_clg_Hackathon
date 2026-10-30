@@ -16,7 +16,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 5 | Import pipeline and Belief-ETA reconciler | **STEP 5: PASS** |
 | 6 | Voice and text ingestion, impact engine and risk bands | **STEP 6: PASS** |
 | 7 | Solver service and recovery plan generation | **STEP 7: PASS** |
-| 8 | Proof checker, Decision Contract and governed approvals | NOT STARTED |
+| 8 | Proof checker, Decision Contract and governed approvals | **STEP 8: PASS** |
 | 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | NOT STARTED |
 | 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | NOT STARTED |
 | 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | NOT STARTED |
@@ -150,16 +150,36 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
     - `PATCH /plans/:id`: modifies plan, increments version, transitions status to `DRAFT`, audits changes.
   - `apps/api/src/routes/disruptions.ts`: `GET /disruptions/:id/routes` returning direct and via feasible routes.
 
+### Step 8 — Proof checker, Decision Contract and governed approvals (PASS)
+- **Part A: Proof-carrying recommendations & Decision Contract (M5, W2)**:
+  - `apps/api/src/services/proofChecker.ts`:
+    - Mandatory claim generator (`AVAILABLE_STOCK`, `SUPPLIER_CAPACITY`, `SUPPLIER_QUALIFIED`, `LANE_LEAD_TIME`, `DEADLINE_MET`, `ORDER_DEMAND`, `SHIPMENT_ETA`, `RESERVATION_AVAILABLE`, `ROUTE_FEASIBLE`, `PROMISE_DATE_ACHIEVABLE`) with origin SYSTEM.
+    - Pure fact verification functions: `checkAnswerFact()` and `checkNoticeDateMatches()`.
+    - Verification engine evaluating each claim against live DB state (`PASS`/`FAIL`, expected, actual, evidence row IDs). Any FAIL sets plan status to `BLOCKED`; all PASS sets status to `VERIFIED`.
+    - Decision Contract builder computing canonical SHA-256 action hash, required approver roles (`Manager` for transfer/split, `Procurement_Approver` for expedite/reserve), rollback eligibility, impact, and reservations.
+    - Injected challenge claims (`POST /plans/:id/challenge`) visibly failing with expected vs actual, blocking approval until cleared.
+  - `apps/api/src/services/reservations.ts`: Clean database-backed `reserveStock()` and `releaseStock()` interface operating on `StockReservation` and `InventoryBalance`.
+- **Part B: Governed approvals, separation of duties, state machine (M6)**:
+  - `apps/api/src/routes/plans.ts`:
+    - `POST /plans/:id/verify`: executes proof checker, builds decision contract and canonical hash.
+    - `POST /plans/:id/challenge` & `DELETE /plans/:id/challenge`: demo challenge mode.
+    - `POST /plans/:id/submit`: enforces `VERIFIED` state, creates stock reservations, creates distinct approval rows per required role with frozen `contract_hash`, transitions status to `PENDING_APPROVAL`.
+    - `POST /plans/:id/approve`: enforces role authority (`Manager`, `Procurement_Approver`), blocks `Administrator`, enforces separation of duties (creator, submitter, and modifiers cannot self-approve), enforces distinct approver per role, verifies contract hash freshness. Updates status to `APPROVED` when all roles approve.
+    - `POST /plans/:id/reject`: requires reason, releases reservations, sets status to `REJECTED`.
+    - Upgraded `GET /plans/:id/cards`: cards show `FEASIBLE` only when claims PASS; `BLOCKED` with failing claim info if failed.
+    - Upgraded `PATCH /plans/:id`: resets plan status to `DRAFT`, invalidates contract hash, records modifier ID, increments version.
+  - `apps/api/src/routes/approvals.ts`: `GET /approvals/queue` returning pending approval items for caller's role.
+  - Domain bus events: `PLAN_SUBMITTED`, `APPROVAL_DECIDED`, `PLAN_APPROVED`.
+
 ---
 
 ## NEXT STEP
 
-**Step 8 — Proof checker, Decision Contract and governed approvals (M5, M6, B8)**
+**Step 9 — Reservations, conflict court, ledger, rollback, guardrails and promise dates (S1, S2, A4, A9, A7)**
 - Target Model: OPUS 4.6
 - Deliverables:
-  - Proof checker (`services/proofChecker.ts`): independent verification of donor inventory, transit feasibility, supplier capacity, guardrail limits. Sets plan status to `FEASIBLE` or `INFEASIBLE`.
-  - Decision Contract: SHA-256 sealed cryptographic payload of approved plan.
-  - Governed approval flow: dual-role approvals (Manager for reallocate/split, Procurement Approver for expedite/alt_supplier).
+  - Part A: Double-booking shield conditional update, Allocation Conflict Court (`allocation_conflicts`), Execution ledger (`POST /plans/:id/execute`), Rollback engine (`POST /plans/:id/rollback`).
+  - Part B: Promise-Date Repair Engine (A7) and Budget Guardrails (A9).
 
 ---
 

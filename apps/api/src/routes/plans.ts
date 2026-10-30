@@ -1,18 +1,24 @@
 /**
  * apps/api/src/routes/plans.ts
  *
- * Step 7 — Recovery plan endpoints:
+ * Step 7 & Step 8 — Recovery plan endpoints:
  *
- *   POST /disruptions/:id/recovery-plans  (Analyst, Manager)
- *   GET  /plans/:id
- *   GET  /plans/:id/tradeoffs
- *   GET  /plans/:id/cards
- *   PATCH /plans/:id                      (Analyst, Manager)
+ *   POST   /disruptions/:id/recovery-plans  (Analyst, Manager)
+ *   GET    /plans/:id
+ *   GET    /plans/:id/tradeoffs
+ *   GET    /plans/:id/cards
+ *   PATCH  /plans/:id                       (Analyst, Manager)
+ *   POST   /plans/:id/verify                (Analyst, Manager)
+ *   POST   /plans/:id/challenge             (Analyst, DEMO_MODE)
+ *   DELETE /plans/:id/challenge             (Analyst, DEMO_MODE)
+ *   POST   /plans/:id/submit                (Analyst, Manager)
+ *   POST   /plans/:id/approve               (Manager, Procurement_Approver)
+ *   POST   /plans/:id/reject                (Manager, Procurement_Approver)
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { authenticateToken, requirePermission } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { Disruption } from '../models/disruptions.js';
 import { Shipment } from '../models/shipments.js';
 import { ShipmentLine } from '../models/shipment-lines.js';
@@ -22,11 +28,21 @@ import { Sku } from '../models/skus.js';
 import { RecoveryPlan } from '../models/recovery-plans.js';
 import { PlanAction } from '../models/plan-actions.js';
 import { PlanTradeoff } from '../models/plan-tradeoffs.js';
+import { PlanClaim } from '../models/plan-claims.js';
+import { Approval } from '../models/approvals.js';
 import { InventoryBalance } from '../models/inventory-balances.js';
-import { TransferLane } from '../models/transfer-lanes.js';
 import { enumerateCandidates, OrderDeadline } from '../services/candidates.js';
+import {
+  verifyPlan,
+  injectChallenge,
+  clearChallengeClaims,
+  deriveRequiredApproverRoles,
+  computeContractHash,
+} from '../services/proofChecker.js';
+import { reserveStock, releaseStock } from '../services/reservations.js';
 import { writeAudit } from '../services/audit.js';
 import { simClock } from '../services/simClock.js';
+import { publish } from '../services/bus.js';
 import { config } from '../config.js';
 
 export const plansRouter = Router();
@@ -35,8 +51,8 @@ export const plansRouter = Router();
 // Helpers
 // ---------------------------------------------------------------------------
 
-function err(res: Response, status: number, code: string, message: string): void {
-  res.status(status).json({ error: { code, message } });
+function err(res: Response, status: number, code: string, message: string, details?: any): void {
+  res.status(status).json({ error: { code, message, details: details || null } });
 }
 
 function isObjectId(s: string): boolean {
@@ -72,17 +88,14 @@ plansRouter.post(
         err(res, 422, 'NO_SHIPMENT_LINES', 'Shipment has no lines'); return;
       }
 
-      // Use the first SKU (primary disrupted SKU — matches impactEngine pattern)
       const skuId = (shipmentLines[0] as any).sku_id;
       const sku = await Sku.findById(skuId).lean();
       if (!sku) { err(res, 422, 'NO_SKU', 'SKU not found'); return; }
 
-      // Get warehouse code
       const Warehouse = mongoose.model('Warehouse');
       const destWh = await Warehouse.findById(destWarehouseId).lean();
       if (!destWh) { err(res, 422, 'NO_WAREHOUSE', 'Destination warehouse not found'); return; }
 
-      // Load open orders at destination warehouse
       const openOrders = await Order.find({
         warehouse_id: destWarehouseId,
         status: { $in: ['OPEN', 'RECOVERING'] },
@@ -92,7 +105,6 @@ plansRouter.post(
         err(res, 422, 'NO_ORDERS', 'No open orders affected by this disruption'); return;
       }
 
-      // Filter orders that have a line for this SKU
       const affectedOrders: typeof openOrders = [];
       for (const order of openOrders) {
         const line = await OrderLine.findOne({ order_id: order._id, sku_id: skuId }).lean();
@@ -103,7 +115,6 @@ plansRouter.post(
         err(res, 422, 'NO_AFFECTED_ORDERS', 'No open orders have lines for the disrupted SKU'); return;
       }
 
-      // Build OrderDeadline[]
       const orderDeadlines: OrderDeadline[] = affectedOrders.map((o) => ({
         sku_id: skuId.toString(),
         sku_code: (sku as any).code,
@@ -112,10 +123,8 @@ plansRouter.post(
         due_hours_from_now: Math.max(0, (o.due_at.getTime() - now.getTime()) / 3_600_000),
       }));
 
-      // Enumerate candidates
       const candidates = await enumerateCandidates(orderDeadlines);
 
-      // Build sources: free stock at destination warehouse
       const srcBalance = await InventoryBalance.findOne({
         warehouse_id: destWarehouseId,
         sku_id: skuId,
@@ -134,7 +143,6 @@ plansRouter.post(
           }]
         : [];
 
-      // Build solver request
       const solverPayload = {
         orders: affectedOrders.map((o) => ({
           code: o.code,
@@ -150,7 +158,6 @@ plansRouter.post(
         time_limit: 2,
       };
 
-      // Call solver — 503 if down, NEVER fallback
       const solverUrl = config.SOLVER_URL;
       let solverResult: any;
       try {
@@ -169,11 +176,9 @@ plansRouter.post(
         err(res, 503, 'SOLVER_UNAVAILABLE', 'Solver service is unavailable'); return;
       }
 
-      // Determine plan version
       const existingCount = await RecoveryPlan.countDocuments({ disruption_id: disruption._id });
       const version = existingCount + 1;
 
-      // Determine overall strategy
       const actionTypes: string[] = (solverResult.actions || []).map((a: any) => a.type as string);
       let strategy: 'REALLOCATE' | 'EXPEDITE' | 'SPLIT' | 'BACKORDER' | 'HYBRID' = 'HYBRID';
       if (actionTypes.length === 0) strategy = 'BACKORDER';
@@ -184,7 +189,6 @@ plansRouter.post(
       const baselineValue: number = solverResult.baseline_objective ?? 0;
       const saving = baselineValue - objectiveValue;
 
-      // Persist RecoveryPlan
       const planData: any = {
         disruption_id: disruption._id,
         version,
@@ -204,7 +208,6 @@ plansRouter.post(
       };
 
       const plan = new RecoveryPlan(planData);
-      // Store extra fields as arbitrary document properties
       (plan as any).objective_value = objectiveValue;
       (plan as any).baseline_value = baselineValue;
       (plan as any).scope = solverResult.scope ?? 'portfolio-level constrained optimisation';
@@ -212,7 +215,6 @@ plansRouter.post(
       (plan as any).collateral = solverResult.collateral ?? [];
       await plan.save();
 
-      // Persist PlanAction rows
       const actionDocs = (solverResult.actions || []).map((a: any, idx: number) => {
         const actionTypeMap: Record<string, 'RESERVE' | 'TRANSFER' | 'EXPEDITE' | 'BACKORDER' | 'SPLIT'> = {
           TRANSFER: 'TRANSFER',
@@ -238,7 +240,6 @@ plansRouter.post(
         await PlanAction.insertMany(actionDocs);
       }
 
-      // Persist PlanTradeoff rows (per-order shortfall before/after)
       const tradeoffDocs = (solverResult.per_order || []).map((po: any) => ({
         plan_id: plan._id,
         axis: `order:${po.code}`,
@@ -249,7 +250,6 @@ plansRouter.post(
         await PlanTradeoff.insertMany(tradeoffDocs);
       }
 
-      // Audit
       await writeAudit({
         action: 'RECOVERY_PLAN_CREATED',
         actor: req.user!._id,
@@ -295,6 +295,7 @@ plansRouter.get(
 
       const actions = await PlanAction.find({ plan_id: plan._id }).sort({ seq: 1 }).lean();
       const tradeoffs = await PlanTradeoff.find({ plan_id: plan._id }).lean();
+      const claims = await PlanClaim.find({ plan_id: plan._id, plan_version: plan.version }).lean();
 
       const p = plan as any;
       const objVal: number = p.objective_value ?? plan.total_cost ?? 0;
@@ -313,14 +314,18 @@ plansRouter.get(
           saving,
           saving_pct: baseVal > 0 ? Math.round((saving / baseVal) * 100) : 0,
           scope: p.scope ?? 'portfolio-level constrained optimisation',
+          contract_hash: plan.contract_hash,
+          decision_contract: plan.decision_contract,
           narrative: plan.narrative,
           created_at: plan.created_at,
           approved_at: plan.approved_at,
+          submitted_at: plan.submitted_at,
         },
         actions,
         per_order: p.per_order ?? [],
         collateral: p.collateral ?? [],
         tradeoffs,
+        claims,
       });
     } catch (e) {
       next(e);
@@ -353,7 +358,7 @@ plansRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// GET /plans/:id/cards  — PENDING_VERIFICATION until Step 8 proof checker
+// GET /plans/:id/cards (Step 8 upgrade: FEASIBLE vs BLOCKED vs PENDING)
 // ---------------------------------------------------------------------------
 plansRouter.get(
   '/plans/:id/cards',
@@ -368,32 +373,72 @@ plansRouter.get(
       if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
 
       const actions = await PlanAction.find({ plan_id: plan._id }).sort({ seq: 1 }).lean();
+      const claims = await PlanClaim.find({ plan_id: plan._id, plan_version: plan.version }).lean();
+
       const p = plan as any;
       const objVal: number = p.objective_value ?? plan.total_cost ?? 0;
       const baseVal: number = p.baseline_value ?? 0;
       const saving = baseVal - objVal;
       const actionCostTotal = actions.reduce((s, a) => s + a.cost, 0);
 
-      // Build one recommendation card per action
-      const cards = actions.map((a) => ({
-        card_id: `${id}-card-${a.seq}`,
-        seq: a.seq,
-        action_type: a.action_type,
-        quantity: a.quantity,
-        cost: a.cost,
-        // Benefit = proportion of saving attributed to this action's cost share
-        benefit: actionCostTotal > 0 ? Math.round((a.cost / actionCostTotal) * saving) : 0,
-        feasibility_status: 'PENDING_VERIFICATION' as const,
-        feasibility_checklist: [
-          { check: 'Donor stock confirmed', passed: null },
-          { check: 'Transit lane active', passed: null },
-          { check: 'Guardrail spend limit', passed: null },
-        ],
-        tradeoff_link: `/plans/${id}/tradeoffs`,
-        duration_hours: a.duration_hours,
-      }));
+      const cards = actions.map((a) => {
+        // Find claims associated with this action
+        const actionClaims = claims.filter(
+          (c) => c.action_id && c.action_id.toString() === a._id.toString(),
+        );
 
-      // Ensure card costs sum to plan objective (action cost portion)
+        let feasibilityStatus: 'FEASIBLE' | 'BLOCKED' | 'PENDING_VERIFICATION' = 'PENDING_VERIFICATION';
+        let failingClaim: any = null;
+
+        if (plan.status === 'DRAFT') {
+          feasibilityStatus = 'PENDING_VERIFICATION';
+        } else if (plan.status === 'VERIFIED' || plan.status === 'APPROVED' || plan.status === 'PENDING_APPROVAL') {
+          feasibilityStatus = 'FEASIBLE';
+        } else if (plan.status === 'BLOCKED') {
+          const failed = actionClaims.find((c) => c.status === 'FAIL') || claims.find((c) => c.status === 'FAIL');
+          if (failed) {
+            feasibilityStatus = 'BLOCKED';
+            failingClaim = {
+              claim_type: failed.claim_type,
+              expected: failed.expected,
+              actual: failed.actual,
+              origin: failed.origin,
+            };
+          } else {
+            feasibilityStatus = 'FEASIBLE';
+          }
+        }
+
+        const checklist = [
+          {
+            check: 'Donor stock confirmed',
+            passed: actionClaims.find((c) => c.claim_type === 'AVAILABLE_STOCK')?.status === 'PASS',
+          },
+          {
+            check: 'Transit lane active',
+            passed: actionClaims.find((c) => c.claim_type === 'ROUTE_FEASIBLE')?.status === 'PASS',
+          },
+          {
+            check: 'Supplier capacity verified',
+            passed: actionClaims.find((c) => c.claim_type === 'SUPPLIER_CAPACITY')?.status === 'PASS',
+          },
+        ];
+
+        return {
+          card_id: `${id}-card-${a.seq}`,
+          seq: a.seq,
+          action_type: a.action_type,
+          quantity: a.quantity,
+          cost: a.cost,
+          benefit: actionCostTotal > 0 ? Math.round((a.cost / actionCostTotal) * saving) : 0,
+          feasibility_status: feasibilityStatus,
+          failing_claim: failingClaim,
+          feasibility_checklist: checklist,
+          tradeoff_link: `/plans/${id}/tradeoffs`,
+          duration_hours: a.duration_hours,
+        };
+      });
+
       const cardCostTotal = cards.reduce((s, c) => s + c.cost, 0);
 
       res.json({
@@ -403,6 +448,460 @@ plansRouter.get(
         cost_total: cardCostTotal,
         benefit_total: saving,
         cards,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/verify (Proof Checker execution)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/verify',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      const result = await verifyPlan(plan._id);
+
+      await writeAudit({
+        action: 'RECOVERY_PLAN_VERIFIED',
+        actor: req.user!._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        after: {
+          status: result.status,
+          claimsCount: result.claims.length,
+          failingCount: result.failing_claims.length,
+          contract_hash: result.contract_hash,
+        },
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        version: plan.version,
+        status: result.status,
+        claims: result.claims,
+        contract_hash: result.contract_hash,
+        decision_contract: result.decision_contract,
+        failing_claims: result.failing_claims,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/challenge (Analyst, DEMO_MODE)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/challenge',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      if (!config.DEMO_MODE) {
+        err(res, 403, 'DEMO_MODE_REQUIRED', 'Challenge plan is only available in DEMO_MODE'); return;
+      }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      const text = req.body.claim_text || 'WH-BLR has 40 units of SKU-101 available';
+      const expected = req.body.expected !== undefined ? req.body.expected : 40;
+      const actual = req.body.actual !== undefined ? req.body.actual : 10;
+
+      const challengeClaim = await injectChallenge(plan._id, text, expected, actual);
+      const verifyRes = await verifyPlan(plan._id);
+
+      await writeAudit({
+        action: 'PLAN_CHALLENGE_INJECTED',
+        actor: req.user!._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        after: { challenge_claim_id: challengeClaim._id.toString(), expected, actual },
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        status: 'BLOCKED',
+        challenge_claim: challengeClaim,
+        failing_claims: verifyRes.failing_claims,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /plans/:id/challenge (Analyst, DEMO_MODE)
+// ---------------------------------------------------------------------------
+plansRouter.delete(
+  '/plans/:id/challenge',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      await clearChallengeClaims(plan._id);
+      const verifyRes = await verifyPlan(plan._id);
+
+      res.status(200).json({
+        plan_id: plan._id,
+        status: verifyRes.status,
+        cleared: true,
+        failing_claims: verifyRes.failing_claims,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/submit (Analyst, Manager)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/submit',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      // Must be VERIFIED
+      if (plan.status !== 'VERIFIED') {
+        const verifyRes = await verifyPlan(plan._id);
+        if (verifyRes.status !== 'VERIFIED') {
+          err(
+            res,
+            409,
+            'PLAN_NOT_VERIFIED',
+            'Plan must be VERIFIED before submission',
+            verifyRes.failing_claims,
+          );
+          return;
+        }
+      }
+
+      // Check challenge claims: challenge claims can NEVER reach approval
+      const challengeCount = await PlanClaim.countDocuments({
+        plan_id: plan._id,
+        plan_version: plan.version,
+        origin: 'CHALLENGE',
+      });
+      if (challengeCount > 0) {
+        err(res, 409, 'CHALLENGE_CLAIM_PRESENT', 'Challenge claims must be removed before submitting plan');
+        return;
+      }
+
+      // Reserve stock
+      const reserveRes = await reserveStock(plan._id);
+      if (!reserveRes.success) {
+        err(res, 409, 'STOCK_RESERVATION_CONFLICT', reserveRes.conflictReason || 'Failed to reserve stock');
+        return;
+      }
+
+      const now = await simClock.now();
+      const actions = await PlanAction.find({ plan_id: plan._id });
+      const requiredRoles = deriveRequiredApproverRoles(actions);
+      const contractHash = plan.contract_hash || computeContractHash(actions);
+
+      // Freeze Decision Contract
+      plan.status = 'PENDING_APPROVAL';
+      plan.submitted_by = req.user!._id;
+      plan.submitted_at = now;
+      if (plan.decision_contract) {
+        plan.decision_contract.reservation_ids = reserveRes.reservationIds;
+      }
+      await plan.save();
+
+      // Create one approval row per required role with contract_hash
+      for (const role of requiredRoles) {
+        await Approval.findOneAndUpdate(
+          { plan_id: plan._id, plan_version: plan.version, required_role: role },
+          {
+            $set: {
+              contract_hash: contractHash,
+              status: 'PENDING',
+              decided_by: null,
+              decided_at: null,
+              comment: null,
+              delegated_from: null,
+            },
+          },
+          { upsert: true, new: true },
+        );
+      }
+
+      await writeAudit({
+        action: 'PLAN_SUBMITTED',
+        actor: req.user!._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        after: {
+          version: plan.version,
+          required_roles: requiredRoles,
+          contract_hash: contractHash,
+          reservation_ids: reserveRes.reservationIds,
+        },
+      });
+
+      await publish('PLAN_SUBMITTED', {
+        planId: plan._id.toString(),
+        submittedBy: req.user!._id.toString(),
+        contractHash,
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        version: plan.version,
+        status: 'PENDING_APPROVAL',
+        required_roles: requiredRoles,
+        contract_hash: contractHash,
+        reservation_ids: reserveRes.reservationIds,
+        message: 'Plan submitted successfully. Awaiting required approvals.',
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/approve (Manager, Procurement_Approver)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/approve',
+  authenticateToken,
+  requireAnyPermission(['approve_reallocate_split', 'approve_expedite_alt_supplier']),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const user = req.user!;
+
+      // 1. Administrator can NEVER approve
+      if (user.role === 'Administrator') {
+        err(res, 403, 'FORBIDDEN', 'Administrator cannot approve recovery plans'); return;
+      }
+
+      // 2. Allowed approval roles: Manager or Procurement_Approver
+      if (user.role !== 'Manager' && user.role !== 'Procurement_Approver') {
+        err(res, 403, 'FORBIDDEN', `Role ${user.role} is not authorized to approve recovery plans`); return;
+      }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      if (plan.status !== 'PENDING_APPROVAL') {
+        err(res, 409, 'INVALID_STATE', `Plan status is ${plan.status}, must be PENDING_APPROVAL`); return;
+      }
+
+      // 3. Separation of duties: creator, submitter, and modifiers cannot approve
+      const isCreator = plan.created_by.equals(user._id);
+      const isSubmitter = plan.submitted_by && plan.submitted_by.equals(user._id);
+      const isModifier = plan.modifier_ids && plan.modifier_ids.some((m) => m.equals(user._id));
+
+      if (isCreator || isSubmitter || isModifier) {
+        err(res, 403, 'SELF_APPROVAL_FORBIDDEN', 'Self-approval not allowed'); return;
+      }
+
+      // 4. Distinct approver check: cannot approve more than one role on same plan/version
+      const alreadyApprovedByCaller = await Approval.findOne({
+        plan_id: plan._id,
+        plan_version: plan.version,
+        decided_by: user._id,
+        status: 'APPROVED',
+      });
+      if (alreadyApprovedByCaller) {
+        err(res, 403, 'DISTINCT_APPROVER_REQUIRED', 'Each required role needs a distinct approver'); return;
+      }
+
+      // 5. Find pending approval row for caller's role
+      const approval = await Approval.findOne({
+        plan_id: plan._id,
+        plan_version: plan.version,
+        required_role: user.role,
+        status: 'PENDING',
+      });
+      if (!approval) {
+        err(res, 400, 'NO_PENDING_APPROVAL', `No pending approval found for role ${user.role}`); return;
+      }
+
+      // 6. Stale contract hash check
+      if (approval.contract_hash !== plan.contract_hash) {
+        err(res, 409, 'STALE_CONTRACT_HASH', 'Approval contract hash does not match current plan hash'); return;
+      }
+
+      const now = await simClock.now();
+      approval.status = 'APPROVED';
+      approval.decided_by = user._id;
+      approval.decided_at = now;
+      approval.comment = req.body.comment || null;
+      await approval.save();
+
+      // 7. Check if all approvals for this version are now approved
+      const pendingCount = await Approval.countDocuments({
+        plan_id: plan._id,
+        plan_version: plan.version,
+        status: 'PENDING',
+      });
+
+      let planFullyApproved = false;
+      if (pendingCount === 0) {
+        plan.status = 'APPROVED';
+        plan.approved_at = now;
+        await plan.save();
+        planFullyApproved = true;
+
+        await publish('PLAN_APPROVED', {
+          planId: plan._id.toString(),
+          approvedBy: user._id.toString(),
+          role: user.role,
+        });
+      }
+
+      await writeAudit({
+        action: 'APPROVAL_DECIDED',
+        actor: user._id,
+        entityType: 'Approval',
+        entityId: approval._id.toString(),
+        after: {
+          decision: 'APPROVED',
+          plan_id: plan._id.toString(),
+          role: user.role,
+          plan_status: plan.status,
+        },
+      });
+
+      await publish('APPROVAL_DECIDED', {
+        planId: plan._id.toString(),
+        approvalId: approval._id.toString(),
+        decision: 'APPROVED',
+        decidedBy: user._id.toString(),
+        role: user.role,
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        plan_status: plan.status,
+        approval_id: approval._id,
+        approved_role: user.role,
+        plan_fully_approved: planFullyApproved,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/reject (Manager, Procurement_Approver)
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/reject',
+  authenticateToken,
+  requireAnyPermission(['approve_reallocate_split', 'approve_expedite_alt_supplier']),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const user = req.user!;
+
+      if (user.role === 'Administrator') {
+        err(res, 403, 'FORBIDDEN', 'Administrator cannot approve or reject recovery plans'); return;
+      }
+
+      if (user.role !== 'Manager' && user.role !== 'Procurement_Approver') {
+        err(res, 403, 'FORBIDDEN', `Role ${user.role} is not authorized to reject recovery plans`); return;
+      }
+
+      // Rejection reason is required
+      const reason = req.body.reason;
+      if (!reason || typeof reason !== 'string' || !reason.trim()) {
+        err(res, 400, 'REASON_REQUIRED', 'Rejection reason is required'); return;
+      }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      const isCreator = plan.created_by.equals(user._id);
+      const isSubmitter = plan.submitted_by && plan.submitted_by.equals(user._id);
+      const isModifier = plan.modifier_ids && plan.modifier_ids.some((m) => m.equals(user._id));
+
+      if (isCreator || isSubmitter || isModifier) {
+        err(res, 403, 'SELF_APPROVAL_FORBIDDEN', 'Self-approval / self-rejection not allowed'); return;
+      }
+
+      const approval = await Approval.findOne({
+        plan_id: plan._id,
+        plan_version: plan.version,
+        required_role: user.role,
+        status: 'PENDING',
+      });
+
+      const now = await simClock.now();
+
+      if (approval) {
+        approval.status = 'REJECTED';
+        approval.decided_by = user._id;
+        approval.decided_at = now;
+        approval.comment = reason;
+        await approval.save();
+      }
+
+      plan.status = 'REJECTED';
+      await plan.save();
+
+      // Release any HELD reservations
+      await releaseStock(plan._id);
+
+      await writeAudit({
+        action: 'APPROVAL_DECIDED',
+        actor: user._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        after: { decision: 'REJECTED', reason, role: user.role },
+      });
+
+      await publish('APPROVAL_DECIDED', {
+        planId: plan._id.toString(),
+        approvalId: approval ? approval._id.toString() : plan._id.toString(),
+        decision: 'REJECTED',
+        decidedBy: user._id.toString(),
+        role: user.role,
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        plan_status: 'REJECTED',
+        reason,
+        message: 'Plan rejected and reservations released.',
       });
     } catch (e) {
       next(e);
@@ -425,8 +924,8 @@ plansRouter.patch(
       const plan = await RecoveryPlan.findById(id);
       if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
 
-      if (!['DRAFT', 'PENDING_APPROVAL'].includes(plan.status)) {
-        err(res, 409, 'IMMUTABLE', 'Only DRAFT or PENDING_APPROVAL plans may be edited'); return;
+      if (!['DRAFT', 'VERIFIED', 'BLOCKED', 'PENDING_APPROVAL'].includes(plan.status)) {
+        err(res, 409, 'IMMUTABLE', `Plan in status ${plan.status} cannot be edited`); return;
       }
 
       const now = await simClock.now();
@@ -437,12 +936,24 @@ plansRouter.patch(
         err(res, 400, 'BAD_STRATEGY', 'Invalid strategy value'); return;
       }
 
+      // Record modifier
+      if (!plan.modifier_ids) plan.modifier_ids = [];
+      if (!plan.modifier_ids.some((m) => m.equals(req.user!._id))) {
+        plan.modifier_ids.push(req.user!._id);
+      }
+
+      // Increment version, reset approvals and hash
       plan.version = plan.version + 1;
       plan.status = 'DRAFT';
+      plan.contract_hash = null;
+      plan.decision_contract = null;
       if (narrative) plan.narrative = narrative;
       if (strategy) plan.strategy = strategy as typeof plan.strategy;
 
       await plan.save();
+
+      // Release any stock reservations from earlier version
+      await releaseStock(plan._id);
 
       await writeAudit({
         action: 'RECOVERY_PLAN_MODIFIED',

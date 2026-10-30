@@ -142,6 +142,40 @@ export function requirePermission(capability: Capability) {
 }
 
 /**
+ * Middleware factory requiring any of the specified capabilities.
+ */
+export function requireAnyPermission(capabilities: Capability[]) {
+  const fn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    req.permissionRequired = capabilities.join('|') as any;
+
+    if (!req.user) {
+      await logAccessDenied(req, 'Unauthenticated access attempt');
+      res.status(401).json({ error: 'Unauthorized', message: 'Authentication required' });
+      return;
+    }
+
+    const hasAny = capabilities.some((cap) => hasPermission(req.user!.role, cap));
+    if (!hasAny) {
+      await logAccessDenied(
+        req,
+        `Role '${req.user.role}' lacks any of '${capabilities.join('|')}'`,
+        capabilities[0],
+      );
+      res.status(403).json({
+        error: 'Forbidden',
+        message: `Role '${req.user.role}' is not authorized`,
+      });
+      return;
+    }
+
+    next();
+  };
+
+  Object.defineProperty(fn, 'name', { value: 'requirePermission' });
+  return fn;
+}
+
+/**
  * Helper to record ACCESS_DENIED audit log without leaking sensitive secrets.
  */
 async function logAccessDenied(

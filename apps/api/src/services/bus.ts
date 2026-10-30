@@ -15,6 +15,8 @@ export type DomainEvent =
   | 'INVENTORY_CHANGED'
   | 'DISRUPTION_OPENED'
   | 'PLAN_GENERATED'
+  | 'PLAN_SUBMITTED'
+  | 'APPROVAL_DECIDED'
   | 'PLAN_APPROVED'
   | 'PLAN_EXECUTED';
 
@@ -60,6 +62,18 @@ export interface DomainEventPayloads {
   PLAN_GENERATED: {
     planId: string;
     disruptionId: string;
+  };
+  PLAN_SUBMITTED: {
+    planId: string;
+    submittedBy: string;
+    contractHash: string;
+  };
+  APPROVAL_DECIDED: {
+    planId: string;
+    approvalId: string;
+    decision: 'APPROVED' | 'REJECTED';
+    decidedBy: string;
+    role: string;
   };
   PLAN_APPROVED: {
     planId: string;
