@@ -12,7 +12,7 @@
  *  - GET  /evidence/:type/:id
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { authenticateToken, requirePermission } from '../middleware/auth.js';
 import { Disruption } from '../models/disruptions.js';
@@ -26,6 +26,7 @@ import { ShipmentEvent } from '../models/shipment-events.js';
 import { InventoryBalance } from '../models/inventory-balances.js';
 import { FieldReport } from '../models/field-reports.js';
 import { AuditLog } from '../models/audit-logs.js';
+import { TransferLane } from '../models/transfer-lanes.js';
 import { getBandForScore } from '../services/impactEngine.js';
 
 export const disruptionsRouter = Router();
@@ -285,3 +286,111 @@ evidenceRouter.get(
   },
 );
 
+
+// ---------------------------------------------------------------------------
+// GET /disruptions/:id/routes — feasible direct / via / expedited route options (A2)
+// ---------------------------------------------------------------------------
+disruptionsRouter.get(
+  '/:id/routes',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({ error: { code: 'BAD_ID', message: 'Invalid disruption id' } });
+        return;
+      }
+
+      const disruption = await Disruption.findById(id).lean();
+      if (!disruption) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Disruption not found' } });
+        return;
+      }
+
+      const shipment = await Shipment.findById(disruption.shipment_id).lean();
+      if (!shipment) {
+        res.status(404).json({ error: { code: 'NO_SHIPMENT', message: 'No shipment linked' } });
+        return;
+      }
+
+      const destWarehouseId = (shipment as any).warehouse_id;
+      const Warehouse = mongoose.model('Warehouse');
+
+      // All active inbound direct lanes
+      const directLanes = await TransferLane.find({
+        to_warehouse_id: destWarehouseId,
+        is_active: true,
+      })
+        .populate('from_warehouse_id', 'code name')
+        .populate('to_warehouse_id', 'code name')
+        .lean();
+
+      const routes: any[] = [];
+
+      for (const lane of directLanes) {
+        const from = lane.from_warehouse_id as any;
+        const to = lane.to_warehouse_id as any;
+        routes.push({
+          type: 'DIRECT',
+          donor_warehouse: from?.code ?? 'UNKNOWN',
+          destination_warehouse: to?.code ?? 'UNKNOWN',
+          transit_hours: lane.transit_hours,
+          cost_per_unit: lane.cost_per_unit,
+          distance_km: lane.distance_km,
+          feasibility_status: 'ROUTE_FEASIBLE',
+          hops: [
+            { from: from?.code, to: to?.code, mode: 'ROAD', hours: lane.transit_hours, cost_per_unit: lane.cost_per_unit },
+          ],
+        });
+      }
+
+      // One-hop via routes
+      const outboundLanes = await TransferLane.find({
+        to_warehouse_id: { $ne: destWarehouseId },
+        is_active: true,
+      })
+        .populate('from_warehouse_id', 'code name')
+        .populate('to_warehouse_id', 'code name')
+        .lean();
+
+      for (const leg1 of outboundLanes) {
+        const viaWarehouseId = (leg1.to_warehouse_id as any)._id ?? leg1.to_warehouse_id;
+        const leg2 = await TransferLane.findOne({
+          from_warehouse_id: viaWarehouseId,
+          to_warehouse_id: destWarehouseId,
+          is_active: true,
+        })
+          .populate('to_warehouse_id', 'code name')
+          .lean();
+
+        if (!leg2) continue;
+
+        const from = leg1.from_warehouse_id as any;
+        const via = leg1.to_warehouse_id as any;
+        const to = leg2.to_warehouse_id as any;
+        const totalHours = leg1.transit_hours + leg2.transit_hours + 2; // 2h processing
+        const totalCost = leg1.cost_per_unit + leg2.cost_per_unit;
+
+        routes.push({
+          type: 'VIA',
+          donor_warehouse: from?.code ?? 'UNKNOWN',
+          via_warehouse: via?.code ?? 'UNKNOWN',
+          destination_warehouse: to?.code ?? 'UNKNOWN',
+          transit_hours: totalHours,
+          cost_per_unit: totalCost,
+          distance_km: (leg1.distance_km ?? 0) + ((leg2 as any).distance_km ?? 0),
+          feasibility_status: 'ROUTE_FEASIBLE',
+          hops: [
+            { from: from?.code, to: via?.code, mode: 'ROAD', hours: leg1.transit_hours, cost_per_unit: leg1.cost_per_unit },
+            { from: via?.code, to: to?.code, mode: 'ROAD', hours: leg2.transit_hours, cost_per_unit: (leg2 as any).cost_per_unit },
+          ],
+        });
+      }
+
+      res.json({ disruption_id: id, routes });
+    } catch (e) {
+      next(e);
+    }
+  },
+);

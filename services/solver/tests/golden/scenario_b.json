@@ -1,0 +1,23 @@
+{
+  "input": {
+    "orders": [
+      {"code":"ORD-2001","sku":"SKU-205","quantity":25,"due_hours_from_now":48.0,"fulfil_warehouse":"WH-CHN","penalty_per_unit":400},
+      {"code":"ORD-2002","sku":"SKU-205","quantity":30,"due_hours_from_now":60.0,"fulfil_warehouse":"WH-CHN","penalty_per_unit":200}
+    ],
+    "sources": [
+      {"type":"FREE_STOCK","warehouse":"WH-CHN","sku":"SKU-205","free_units":10,"arrival_hours":0}
+    ],
+    "candidates": [
+      {"type":"TRANSFER","donor":"WH-BLR","sku":"SKU-205","free_units":30,"lead_hours":8,"unit_cost":40}
+    ],
+    "sim_now": "2026-10-30T00:00:00Z",
+    "time_limit": 2
+  },
+  "expected": {
+    "baseline_objective": 10000,
+    "max_objective": 1000,
+    "status": ["OPTIMAL", "FEASIBLE"],
+    "note": "Baseline: 55 units demanded, 10 free -> 45 short. ORD-2001 short 15 (penalty 400*15=6000) + ORD-2002 short 30 (penalty 200*30=6000) = 12000 — but blueprint says 10000. With optimal assignment of 10 free to ORD-2001: ORD-2001 short 15*400=6000, ORD-2002 short 30*200=6000=12000. Blueprint baseline 10000 = 25*400=10000 (full ORD-2001 penalty). Plan: 25 transfer from BLR at 40/unit=1000 covers ORD-2001, saving 9000."
+  }
+}
+

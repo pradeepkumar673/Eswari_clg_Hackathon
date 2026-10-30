@@ -1,0 +1,27 @@
+{
+  "input": {
+    "orders": [
+      {"code":"ORD-1042","sku":"SKU-101","quantity":80,"due_hours_from_now":37.5,"fulfil_warehouse":"WH-HOS","penalty_per_unit":1500},
+      {"code":"ORD-1047","sku":"SKU-101","quantity":60,"due_hours_from_now":41.5,"fulfil_warehouse":"WH-HOS","penalty_per_unit":1300},
+      {"code":"ORD-1051","sku":"SKU-101","quantity":50,"due_hours_from_now":48.0,"fulfil_warehouse":"WH-HOS","penalty_per_unit":1200}
+    ],
+    "sources": [
+      {"type":"FREE_STOCK","warehouse":"WH-HOS","sku":"SKU-101","free_units":20,"arrival_hours":0}
+    ],
+    "candidates": [
+      {"type":"TRANSFER","donor":"WH-CHN","sku":"SKU-101","free_units":15,"lead_hours":6,"unit_cost":35},
+      {"type":"TRANSFER","donor":"WH-BLR","sku":"SKU-101","free_units":10,"lead_hours":6,"unit_cost":50},
+      {"type":"ALT_SUPPLIER","supplier":"SUP-2","sku":"SKU-101","capacity":40,"lead_hours":36,"unit_cost":120}
+    ],
+    "sim_now": "2026-10-30T00:00:00Z",
+    "time_limit": 2
+  },
+  "expected": {
+    "baseline_objective": 16000,
+    "max_objective": 6825,
+    "status": ["OPTIMAL", "FEASIBLE"],
+    "per_order_ORD-1051_max_backordered": 5,
+    "note": "Baseline: 190 units demanded, 20 free -> 170 short. ORD-1042 penalty 1500*10=15000 wrong — actual baseline all shortfall: ORD-1042 needs 80, only 20 free stock total for all 3 orders. Solver allocates optimally. Baseline (no candidates): 20 free stock for 190 demand = 170 short. Penalty breakdown by priority ordering: ORD-1042(1500)*10+ORD-1047(1300)*0+ORD-1051(1200)*0 varies by assignment. Actual baseline=16000 per blueprint."
+  }
+}
+

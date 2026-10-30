@@ -9,6 +9,7 @@ import { importsRouter } from './routes/imports.js';
 import { eventsRouter } from './routes/events.js';
 import { voiceRouter, textIngestRouter, fixturesRouter } from './routes/ingest.js';
 import { disruptionsRouter, riskPolicyRouter, evidenceRouter } from './routes/disruptions.js';
+import { plansRouter } from './routes/plans.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
 
@@ -95,6 +96,9 @@ app.use('/risk/policy', riskPolicyRouter);
 
 app.use('/api/v1/evidence', evidenceRouter);
 app.use('/evidence', evidenceRouter);
+
+app.use('/api/v1', plansRouter);
+app.use('/', plansRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

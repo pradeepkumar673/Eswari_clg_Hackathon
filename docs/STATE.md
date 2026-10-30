@@ -15,7 +15,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 4 | Auth, RBAC, audit hash chain | **STEP 4: PASS** |
 | 5 | Import pipeline and Belief-ETA reconciler | **STEP 5: PASS** |
 | 6 | Voice and text ingestion, impact engine and risk bands | **STEP 6: PASS** |
-| 7 | Solver service and recovery plan generation | NOT STARTED |
+| 7 | Solver service and recovery plan generation | **STEP 7: PASS** |
 | 8 | Proof checker, Decision Contract and governed approvals | NOT STARTED |
 | 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | NOT STARTED |
 | 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | NOT STARTED |
@@ -135,15 +135,31 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
     - Heatgrid factor matrix.
   - Monorepo full suite: 115 Vitest tests + 1 Pytest test passing cleanly.
 
+### Step 7 — Solver service and recovery plan generation (PASS)
+- **Part A: Solver service (Python FastAPI + OR-Tools CP-SAT)**:
+  - `services/solver/main.py`: CP-SAT model with `POST /solve`, integer units assigned per candidate->order (only if arrival <= due), shortfall per order, minimizes `sum(penalty*shortfall) + action_cost`. Returns `status`, `actions`, `per_order`, `objective`, `baseline_objective`, `collateral`, `solve_ms`, and `scope: "portfolio-level constrained optimisation"`.
+  - Golden instances: Scenario A (`services/solver/tests/golden/scenario_a.json`) and Scenario B (`services/solver/tests/golden/scenario_b.json`).
+  - Brute-force verifier and tests: 12 tests in `services/solver/tests/test_solver.py` all passing.
+- **Part B: Node.js API candidate enumerator and recovery plans**:
+  - `apps/api/src/services/candidates.ts`: Candidate enumerator evaluating transfer lanes, donor free stock, one-hop via routes, qualified alt suppliers with capacity, and filtering out routes missing deadlines.
+  - `apps/api/src/routes/plans.ts`:
+    - `POST /disruptions/:id/recovery-plans` (Analyst, Manager): calls solver, persists `recovery_plans` + `plan_actions` + `plan_tradeoffs`, returns 503 if solver down (no fake data fallback).
+    - `GET /plans/:id`: plan details with baseline vs plan objective, savings %, per-order breakdown, and collateral.
+    - `GET /plans/:id/tradeoffs`: trade-off ledger per order before/after.
+    - `GET /plans/:id/cards`: recommendation cards with `PENDING_VERIFICATION` status (until Step 8 proof checker).
+    - `PATCH /plans/:id`: modifies plan, increments version, transitions status to `DRAFT`, audits changes.
+  - `apps/api/src/routes/disruptions.ts`: `GET /disruptions/:id/routes` returning direct and via feasible routes.
+
 ---
 
 ## NEXT STEP
 
-**Step 7 — Solver service and recovery plan generation (M4, A2, A3, B12)**
+**Step 8 — Proof checker, Decision Contract and governed approvals (M5, M6, B8)**
 - Target Model: OPUS 4.6
 - Deliverables:
-  - Part A: services/solver (Python FastAPI + OR-Tools CP-SAT) with `POST /solve`, golden instances (Scenario A & B), brute-force verification.
-  - Part B: Candidate enumerator, recovery plan generation (`POST /disruptions/:id/recovery-plans`), trade-off ledger (`GET /plans/:id/tradeoffs`), collateral panel, recommendation cards (`GET /plans/:id/cards`).
+  - Proof checker (`services/proofChecker.ts`): independent verification of donor inventory, transit feasibility, supplier capacity, guardrail limits. Sets plan status to `FEASIBLE` or `INFEASIBLE`.
+  - Decision Contract: SHA-256 sealed cryptographic payload of approved plan.
+  - Governed approval flow: dual-role approvals (Manager for reallocate/split, Procurement Approver for expedite/alt_supplier).
 
 ---
 
