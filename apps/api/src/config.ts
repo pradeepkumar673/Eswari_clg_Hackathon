@@ -16,8 +16,14 @@ const ConfigSchema = z.object({
   SOLVER_URL: z.string().url().default('http://127.0.0.1:8000'),
   GROQ_API_KEY: z.string().optional(),
   SIM_NOW: z.string().optional(),
-  DEMO_MODE: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(true))
+  DEMO_MODE: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(true)),
+  DEMO_PASSWORD: z.string().default('demo_recovery_2026'),
+  // Step 19 Config
+  MAP_TILE_URL: z.string().default(''),
+  GEOFENCE_RADIUS_M: z.coerce.number().default(2000),
+  SIM_TRUCK_KMH: z.coerce.number().default(50),
+  CCTV_EVIDENCE_DIR: z.string().default('./.data/evidence'),
+  VISION_URL: z.string().url().default('http://127.0.0.1:8010'),
 });
 
 export const config = ConfigSchema.parse(process.env);
-

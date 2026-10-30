@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { app } from './app.js';
 import { connectDB } from './db.js';
 import { config } from './config.js';
@@ -5,6 +6,7 @@ import { logger } from './logger.js';
 import { ensureIndexes } from './models/index.js';
 import { initChainState } from './services/audit.js';
 import { verifyRoutePermissions } from './middleware/routeCheck.js';
+import { initWebSocketServer } from './services/websocket.js';
 
 async function bootstrap() {
   await connectDB();
@@ -12,8 +14,12 @@ async function bootstrap() {
   await initChainState();
   verifyRoutePermissions(app);
 
-  app.listen(config.PORT, () => {
+  const server = http.createServer(app);
+  initWebSocketServer(server);
+
+  server.listen(config.PORT, () => {
     logger.info(`DisruptionIQ API server running on port ${config.PORT}`);
+    logger.info(`DisruptionIQ WebSocket server attached at /ws`);
   });
 }
 

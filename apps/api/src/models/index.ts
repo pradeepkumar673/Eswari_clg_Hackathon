@@ -60,6 +60,19 @@ export * from './customer-notices.js';
 export * from './settings.js';
 export * from './chain-state.js';
 
+// Step 19 Extensions
+export * from './cctv-clips.js';
+export * from './cctv-events.js';
+export * from './evidence-items.js';
+export * from './supplier-claims.js';
+export * from './driver-pings.js';
+export * from './driver-incidents.js';
+export * from './reroute-proposals.js';
+export * from './zones.js';
+export * from './zone-stock-assignments.js';
+export * from './inbound-slot-plans.js';
+export * from './damage-policies.js';
+
 // Import references for ensureIndexes
 import { User } from './users.js';
 import { Supplier } from './suppliers.js';
@@ -115,6 +128,18 @@ import { CustomerNotice } from './customer-notices.js';
 import { Setting } from './settings.js';
 import { ChainState } from './chain-state.js';
 
+import { CctvClip } from './cctv-clips.js';
+import { CctvEvent } from './cctv-events.js';
+import { EvidenceItem } from './evidence-items.js';
+import { SupplierClaim } from './supplier-claims.js';
+import { DriverPing } from './driver-pings.js';
+import { DriverIncident } from './driver-incidents.js';
+import { RerouteProposal } from './reroute-proposals.js';
+import { Zone } from './zones.js';
+import { ZoneStockAssignment } from './zone-stock-assignments.js';
+import { InboundSlotPlan } from './inbound-slot-plans.js';
+import { DamagePolicy } from './damage-policies.js';
+
 const ALL_MODELS = [
   User,
   Supplier,
@@ -165,6 +190,18 @@ const ALL_MODELS = [
   CustomerNotice,
   Setting,
   ChainState,
+  // Step 19
+  CctvClip,
+  CctvEvent,
+  EvidenceItem,
+  SupplierClaim,
+  DriverPing,
+  DriverIncident,
+  RerouteProposal,
+  Zone,
+  ZoneStockAssignment,
+  InboundSlotPlan,
+  DamagePolicy,
 ];
 
 /**
@@ -180,6 +217,13 @@ export async function ensureIndexes(dbInstance?: mongoose.mongo.Db): Promise<voi
   // 1. Create all model indexes
   for (const model of ALL_MODELS) {
     try {
+      if (model.modelName === 'InboundSlotPlan') {
+        const existingIndexes = await db.collection('inbound_slot_plans').indexes().catch(() => []);
+        const oldIdx = existingIndexes.find((idx: any) => idx.name === 'shipment_id_1' && !idx.unique);
+        if (oldIdx) {
+          await db.collection('inbound_slot_plans').dropIndex('shipment_id_1').catch(() => {});
+        }
+      }
       await model.createIndexes();
     } catch (err: any) {
       logger.warn({ model: model.modelName, err: err.message }, 'createIndexes warning');
@@ -187,7 +231,7 @@ export async function ensureIndexes(dbInstance?: mongoose.mongo.Db): Promise<voi
   }
 
   // 2. Enforce collection validator on inventory_balances: reserved >= 0 AND reserved <= on_hand
-  const validator = {
+  const invValidator = {
     $expr: {
       $and: [
         { $gte: ['$reserved', 0] },
@@ -201,19 +245,50 @@ export async function ensureIndexes(dbInstance?: mongoose.mongo.Db): Promise<voi
     const collections = await db.listCollections({ name: 'inventory_balances' }).toArray();
     if (collections.length === 0) {
       await db.createCollection('inventory_balances', {
-        validator,
+        validator: invValidator,
         validationLevel: 'strict',
         validationAction: 'error',
       });
     } else {
       await db.command({
         collMod: 'inventory_balances',
-        validator,
+        validator: invValidator,
         validationLevel: 'strict',
         validationAction: 'error',
       });
     }
   } catch (err: any) {
     logger.warn({ err: err.message }, 'Failed to set inventory_balances collection validator');
+  }
+
+  // 3. Enforce collection validator on zones: reserved_inbound_slots >= 0 AND reserved_inbound_slots <= capacity_slots
+  const zoneValidator = {
+    $expr: {
+      $and: [
+        { $gte: ['$reserved_inbound_slots', 0] },
+        { $gte: ['$capacity_slots', 0] },
+        { $lte: ['$reserved_inbound_slots', '$capacity_slots'] },
+      ],
+    },
+  };
+
+  try {
+    const zoneCols = await db.listCollections({ name: 'zones' }).toArray();
+    if (zoneCols.length === 0) {
+      await db.createCollection('zones', {
+        validator: zoneValidator,
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+    } else {
+      await db.command({
+        collMod: 'zones',
+        validator: zoneValidator,
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+    }
+  } catch (err: any) {
+    logger.warn({ err: err.message }, 'Failed to set zones collection validator');
   }
 }

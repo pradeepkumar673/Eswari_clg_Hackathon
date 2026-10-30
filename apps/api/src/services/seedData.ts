@@ -34,6 +34,8 @@ import { GuardrailPolicy } from '../models/guardrail-policies.js';
 import { Fingerprint } from '../models/fingerprints.js';
 import { HistoricalCase } from '../models/historical-cases.js';
 import { Setting } from '../models/settings.js';
+import { Zone } from '../models/zones.js';
+import { DamagePolicy } from '../models/damage-policies.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -97,15 +99,42 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
   const whDocs = await upsertMany(Warehouse, [
     {
       filter: { code: 'WH-HOS' },
-      data: { code: 'WH-HOS', name: 'Hosur Warehouse', map_x: 520, map_y: 340, processing_hours: 2, is_hub: false },
+      data: {
+        code: 'WH-HOS',
+        name: 'Hosur Warehouse',
+        map_x: 520,
+        map_y: 340,
+        lat: 12.7409, // SYNTHETIC approximate city coordinates
+        lng: 77.8253, // SYNTHETIC approximate city coordinates
+        processing_hours: 2,
+        is_hub: false,
+      },
     },
     {
       filter: { code: 'WH-CHN' },
-      data: { code: 'WH-CHN', name: 'Chennai Warehouse', map_x: 640, map_y: 600, processing_hours: 2, is_hub: true },
+      data: {
+        code: 'WH-CHN',
+        name: 'Chennai Warehouse',
+        map_x: 640,
+        map_y: 600,
+        lat: 13.0827, // SYNTHETIC approximate city coordinates
+        lng: 80.2707, // SYNTHETIC approximate city coordinates
+        processing_hours: 2,
+        is_hub: true,
+      },
     },
     {
       filter: { code: 'WH-BLR' },
-      data: { code: 'WH-BLR', name: 'Bengaluru Warehouse', map_x: 420, map_y: 450, processing_hours: 2, is_hub: false },
+      data: {
+        code: 'WH-BLR',
+        name: 'Bengaluru Warehouse',
+        map_x: 420,
+        map_y: 450,
+        lat: 12.9716, // SYNTHETIC approximate city coordinates
+        lng: 77.5946, // SYNTHETIC approximate city coordinates
+        processing_hours: 2,
+        is_hub: false,
+      },
     },
   ]);
 
@@ -124,6 +153,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
         lead_time_hours: 36,
         map_x: 490,
         map_y: 180,
+        lat: 12.9352, // SYNTHETIC approximate city coordinates
+        lng: 77.6245, // SYNTHETIC approximate city coordinates
         on_time_rate: null,
         quality_score: null,
       },
@@ -137,6 +168,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
         lead_time_hours: 36,
         map_x: 310,
         map_y: 280,
+        lat: 12.8342, // SYNTHETIC approximate city coordinates
+        lng: 79.7036, // SYNTHETIC approximate city coordinates
         on_time_rate: null,
         quality_score: null,
       },
@@ -150,6 +183,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
         lead_time_hours: 48,
         map_x: 750,
         map_y: 200,
+        lat: 11.0168, // SYNTHETIC approximate city coordinates
+        lng: 76.9558, // SYNTHETIC approximate city coordinates
         on_time_rate: null,
         quality_score: null,
       },
@@ -163,6 +198,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
         lead_time_hours: 24,
         map_x: 200,
         map_y: 500,
+        lat: 12.2958, // SYNTHETIC approximate city coordinates
+        lng: 76.6394, // SYNTHETIC approximate city coordinates
         on_time_rate: null,
         quality_score: null,
       },
@@ -175,16 +212,16 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
 
   // ── 4. SKUs ───────────────────────────────────────────────────────────────
   const skuDocs = await upsertMany(Sku, [
-    { filter: { code: 'SKU-101' }, data: { code: 'SKU-101', name: 'Bearing Assembly Type-A', unit_cost: 850, weight_kg: 1.2, category: 'Mechanical', is_critical: true } },
-    { filter: { code: 'SKU-205' }, data: { code: 'SKU-205', name: 'Control Module ECU', unit_cost: 2400, weight_kg: 0.5, category: 'Electronics', is_critical: true } },
-    { filter: { code: 'SKU-110' }, data: { code: 'SKU-110', name: 'Hydraulic Seal Kit', unit_cost: 320, weight_kg: 0.3, category: 'Mechanical', is_critical: false } },
-    { filter: { code: 'SKU-115' }, data: { code: 'SKU-115', name: 'Drive Shaft Universal Joint', unit_cost: 1100, weight_kg: 2.8, category: 'Mechanical', is_critical: false } },
-    { filter: { code: 'SKU-220' }, data: { code: 'SKU-220', name: 'Power Inverter Module', unit_cost: 3200, weight_kg: 1.8, category: 'Electronics', is_critical: true } },
-    { filter: { code: 'SKU-330' }, data: { code: 'SKU-330', name: 'Coolant Pump', unit_cost: 750, weight_kg: 3.5, category: 'Fluid Systems', is_critical: false } },
-    { filter: { code: 'SKU-401' }, data: { code: 'SKU-401', name: 'Brake Pad Set', unit_cost: 480, weight_kg: 2.0, category: 'Safety', is_critical: true } },
-    { filter: { code: 'SKU-402' }, data: { code: 'SKU-402', name: 'ABS Sensor Ring', unit_cost: 620, weight_kg: 0.4, category: 'Safety', is_critical: true } },
-    { filter: { code: 'SKU-510' }, data: { code: 'SKU-510', name: 'Gasket Set Premium', unit_cost: 290, weight_kg: 0.8, category: 'Mechanical', is_critical: false } },
-    { filter: { code: 'SKU-615' }, data: { code: 'SKU-615', name: 'Wiring Harness Assembly', unit_cost: 1850, weight_kg: 4.2, category: 'Electronics', is_critical: false } },
+    { filter: { code: 'SKU-101' }, data: { code: 'SKU-101', name: 'Bearing Assembly Type-A', unit_cost: 850, weight_kg: 1.2, units_per_slot: 10, category: 'Mechanical', is_critical: true } },
+    { filter: { code: 'SKU-205' }, data: { code: 'SKU-205', name: 'Control Module ECU', unit_cost: 2400, weight_kg: 0.5, units_per_slot: 10, category: 'Electronics', is_critical: true } },
+    { filter: { code: 'SKU-110' }, data: { code: 'SKU-110', name: 'Hydraulic Seal Kit', unit_cost: 320, weight_kg: 0.3, units_per_slot: 10, category: 'Mechanical', is_critical: false } },
+    { filter: { code: 'SKU-115' }, data: { code: 'SKU-115', name: 'Drive Shaft Universal Joint', unit_cost: 1100, weight_kg: 2.8, units_per_slot: 10, category: 'Mechanical', is_critical: false } },
+    { filter: { code: 'SKU-220' }, data: { code: 'SKU-220', name: 'Power Inverter Module', unit_cost: 3200, weight_kg: 1.8, units_per_slot: 10, category: 'Electronics', is_critical: true } },
+    { filter: { code: 'SKU-330' }, data: { code: 'SKU-330', name: 'Coolant Pump', unit_cost: 750, weight_kg: 3.5, units_per_slot: 10, category: 'Fluid Systems', is_critical: false } },
+    { filter: { code: 'SKU-401' }, data: { code: 'SKU-401', name: 'Brake Pad Set', unit_cost: 480, weight_kg: 2.0, units_per_slot: 10, category: 'Safety', is_critical: true } },
+    { filter: { code: 'SKU-402' }, data: { code: 'SKU-402', name: 'ABS Sensor Ring', unit_cost: 620, weight_kg: 0.4, units_per_slot: 10, category: 'Safety', is_critical: true } },
+    { filter: { code: 'SKU-510' }, data: { code: 'SKU-510', name: 'Gasket Set Premium', unit_cost: 290, weight_kg: 0.8, units_per_slot: 10, category: 'Mechanical', is_critical: false } },
+    { filter: { code: 'SKU-615' }, data: { code: 'SKU-615', name: 'Wiring Harness Assembly', unit_cost: 1850, weight_kg: 4.2, units_per_slot: 10, category: 'Electronics', is_critical: false } },
   ]);
 
   const sku: Record<string, mongoose.Types.ObjectId> = {};
@@ -208,14 +245,14 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
 
   // ── 6. TransferLanes ──────────────────────────────────────────────────────
   await upsertMany(TransferLane, [
-    { filter: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-HOS'] }, data: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-HOS'], transit_hours: 5, cost_per_unit: 35, distance_km: 200, is_active: true } },
-    { filter: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-HOS'] }, data: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-HOS'], transit_hours: 3, cost_per_unit: 50, distance_km: 120, is_active: true } },
-    { filter: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-CHN'] }, data: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-CHN'], transit_hours: 4, cost_per_unit: 40, distance_km: 160, is_active: true } },
-    { filter: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-CHN'] }, data: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-CHN'], transit_hours: 5, cost_per_unit: 38, distance_km: 200, is_active: true } },
-    { filter: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-BLR'] }, data: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-BLR'], transit_hours: 3, cost_per_unit: 52, distance_km: 120, is_active: true } },
-    { filter: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-BLR'] }, data: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-BLR'], transit_hours: 4, cost_per_unit: 42, distance_km: 160, is_active: true } },
+    { filter: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-HOS'] }, data: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-HOS'], transit_hours: 5, cost_per_unit: 35, distance_km: 300, is_active: true } },
+    { filter: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-HOS'] }, data: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-HOS'], transit_hours: 3, cost_per_unit: 50, distance_km: 40, is_active: true } },
+    { filter: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-CHN'] }, data: { from_warehouse_id: wh['WH-BLR'], to_warehouse_id: wh['WH-CHN'], transit_hours: 4, cost_per_unit: 40, distance_km: 350, is_active: true } },
+    { filter: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-CHN'] }, data: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-CHN'], transit_hours: 5, cost_per_unit: 38, distance_km: 300, is_active: true } },
+    { filter: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-BLR'] }, data: { from_warehouse_id: wh['WH-HOS'], to_warehouse_id: wh['WH-BLR'], transit_hours: 3, cost_per_unit: 52, distance_km: 40, is_active: true } },
+    { filter: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-BLR'] }, data: { from_warehouse_id: wh['WH-CHN'], to_warehouse_id: wh['WH-BLR'], transit_hours: 4, cost_per_unit: 42, distance_km: 350, is_active: true } },
   ]);
-  console.log('[seed] TransferLanes: CHN↔HOS, BLR↔HOS, BLR↔CHN');
+  console.log('[seed] TransferLanes: CHN↔HOS (300km), BLR↔HOS (40km), BLR↔CHN (350km)');
 
   // ── 7. Shipments ──────────────────────────────────────────────────────────
   type ShipmentSeed = {
@@ -494,13 +531,17 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
   const passwordHash = await bcryptjs.hash(rawPassword, 10);
 
   const userSeeds = [
-    { username: 'analyst', display_name: 'Priya Analyst', role: 'Analyst' as const, warehouse_id: null },
-    { username: 'manager', display_name: 'Rajan Manager', role: 'Manager' as const, warehouse_id: null },
-    { username: 'manager2', display_name: 'Divya Manager', role: 'Manager' as const, warehouse_id: null },
-    { username: 'operator', display_name: 'Suresh Operator', role: 'Warehouse_Operator' as const, warehouse_id: wh['WH-HOS'] },
-    { username: 'procurement', display_name: 'Meena Procurement', role: 'Procurement_Approver' as const, warehouse_id: null },
-    { username: 'procurement2', display_name: 'Arjun Procurement', role: 'Procurement_Approver' as const, warehouse_id: null },
-    { username: 'admin', display_name: 'Admin User', role: 'Administrator' as const, warehouse_id: null },
+    { username: 'analyst', display_name: 'Priya Analyst', role: 'Analyst' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'manager', display_name: 'Rajan Manager', role: 'Manager' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'manager2', display_name: 'Divya Manager', role: 'Manager' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'operator', display_name: 'Suresh Operator', role: 'Warehouse_Operator' as const, warehouse_id: wh['WH-HOS'], driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'procurement', display_name: 'Meena Procurement', role: 'Procurement_Approver' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'procurement2', display_name: 'Arjun Procurement', role: 'Procurement_Approver' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    { username: 'admin', display_name: 'Admin User', role: 'Administrator' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
+    // Step 19 Users
+    { username: 'drv1', display_name: 'Driver 1 (Ramesh)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-1', truck_id: 'SHP-204', supplier_id: null },
+    { username: 'drv2', display_name: 'Driver 2 (Karthik)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-2', truck_id: 'SHP-310', supplier_id: null },
+    { username: 'sup1', display_name: 'Supplier Rep 1 (Apex)', role: 'SUPPLIER' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: 'SUP-1' },
   ];
 
   for (const u of userSeeds) {
@@ -509,10 +550,13 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
       password_hash: passwordHash,
       role: u.role,
       warehouse_id: u.warehouse_id,
+      driver_id: u.driver_id,
+      truck_id: u.truck_id,
+      supplier_id: u.supplier_id,
       display_name: u.display_name,
     });
   }
-  console.log('[seed] Users: 7 users');
+  console.log('[seed] Users: 10 users (including 2 DRIVER and 1 SUPPLIER)');
 
   // ── 11. SourceTrust ───────────────────────────────────────────────────────
   await upsertMany(SourceTrust, [
@@ -720,6 +764,97 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
     });
   }
   console.log('[seed] HistoricalCases: 12 cases (marked SEEDED)');
+
+  // ── 17. Step 19: Damage Policies ───────────────────────────────────────────
+  await upsertMany(DamagePolicy, [
+    {
+      filter: { band: 'MINOR' },
+      data: {
+        band: 'MINOR',
+        lead_time_hours: 0,
+        action_description: 'Minor cosmetic packaging damage; accept with note',
+        requires_supplier_claim: false,
+      },
+    },
+    {
+      filter: { band: 'MAJOR' },
+      data: {
+        band: 'MAJOR',
+        lead_time_hours: 24,
+        action_description: 'Structural box crush; quarantine and inspect sample',
+        requires_supplier_claim: true,
+      },
+    },
+    {
+      filter: { band: 'SEVERE' },
+      data: {
+        band: 'SEVERE',
+        lead_time_hours: 48,
+        action_description: 'Severe structural puncture; full shipment rejected',
+        requires_supplier_claim: true,
+      },
+    },
+  ]);
+  console.log('[seed] DamagePolicies: MINOR (0h), MAJOR (24h), SEVERE (48h)');
+
+  // ── 18. Step 19: Zones for WH-HOS ──────────────────────────────────────────
+  await upsertMany(Zone, [
+    {
+      filter: { zone_id: 'ZN-HOS-REC' },
+      data: {
+        zone_id: 'ZN-HOS-REC',
+        warehouse_id: 'WH-HOS',
+        name: 'Receiving Dock A',
+        zone_type: 'RECEIVING',
+        polygon: [
+          [50, 50],
+          [250, 50],
+          [250, 200],
+          [50, 200],
+        ],
+        capacity_slots: 50,
+        reserved_inbound_slots: 0,
+        version: 1,
+      },
+    },
+    {
+      filter: { zone_id: 'ZN-HOS-STR' },
+      data: {
+        zone_id: 'ZN-HOS-STR',
+        warehouse_id: 'WH-HOS',
+        name: 'Main Storage Racks',
+        zone_type: 'STORAGE',
+        polygon: [
+          [50, 250],
+          [450, 250],
+          [450, 600],
+          [50, 600],
+        ],
+        capacity_slots: 120,
+        reserved_inbound_slots: 0,
+        version: 1,
+      },
+    },
+    {
+      filter: { zone_id: 'ZN-HOS-DSP' },
+      data: {
+        zone_id: 'ZN-HOS-DSP',
+        warehouse_id: 'WH-HOS',
+        name: 'Dispatch Staging Bay',
+        zone_type: 'DISPATCH',
+        polygon: [
+          [500, 50],
+          [700, 50],
+          [700, 300],
+          [500, 300],
+        ],
+        capacity_slots: 40,
+        reserved_inbound_slots: 0,
+        version: 1,
+      },
+    },
+  ]);
+  console.log('[seed] Zones: 3 zones for WH-HOS (RECEIVING 50, STORAGE 120, DISPATCH 40)');
 
   // ── Done ──────────────────────────────────────────────────────────────────
   if (disconnectAfter) {

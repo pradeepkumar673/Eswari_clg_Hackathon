@@ -5,7 +5,11 @@ export const UserRoleSchema = z.enum([
   'Manager',
   'Warehouse_Operator',
   'Procurement_Approver',
-  'Administrator'
+  'Administrator',
+  'DRIVER',
+  'SUPPLIER',
+  'Driver',
+  'Supplier',
 ]);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
@@ -16,6 +20,9 @@ export const UserSchema = z.object({
   password_hash: z.string(),
   role: UserRoleSchema,
   warehouse_id: z.string().nullable().optional(),
+  driver_id: z.string().nullable().optional(),
+  truck_id: z.string().nullable().optional(),
+  supplier_id: z.string().nullable().optional(),
   display_name: z.string(),
   created_at: z.coerce.date().optional()
 });
@@ -30,6 +37,8 @@ export const SupplierSchema = z.object({
   lead_time_hours: z.number().int().nonnegative(),
   map_x: z.number().int().min(0).max(1000),
   map_y: z.number().int().min(0).max(1000),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
   on_time_rate: z.number().min(0).max(1).nullable().optional(),
   quality_score: z.number().min(0).max(1).nullable().optional(),
   created_at: z.coerce.date().optional()
@@ -43,6 +52,8 @@ export const WarehouseSchema = z.object({
   name: z.string(),
   map_x: z.number().int().min(0).max(1000),
   map_y: z.number().int().min(0).max(1000),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
   processing_hours: z.number().int().nonnegative().default(2),
   is_hub: z.boolean().default(false),
   created_at: z.coerce.date().optional()
@@ -56,6 +67,7 @@ export const SkuSchema = z.object({
   name: z.string(),
   unit_cost: z.number().int().nonnegative(), // INR integer
   weight_kg: z.number().nonnegative(),
+  units_per_slot: z.number().int().positive().default(10),
   category: z.string(),
   is_critical: z.boolean().default(false),
   created_at: z.coerce.date().optional()

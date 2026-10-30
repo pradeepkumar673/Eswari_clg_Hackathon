@@ -31,6 +31,10 @@ import { customerNoticesRouter } from './routes/notices.js';
 import { askDeskRouter } from './routes/askDesk.js';
 import { whatifRouter } from './routes/whatif.js';
 import { adminOpsRouter } from './routes/adminOps.js';
+import { trackingRouter } from './routes/tracking.js';
+import { claimsRouter } from './routes/claims.js';
+import { cctvRouter } from './routes/cctv.js';
+import { zonesRouter } from './routes/zones.js';
 import { initNotificationSubscribers } from './services/notifications.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
@@ -201,6 +205,19 @@ app.use('/whatif', whatifRouter);
 
 app.use('/api/v1/admin', adminOpsRouter);
 app.use('/admin', adminOpsRouter);
+
+// Step 19 Foundation Routers
+app.use('/api/v1/tracking', trackingRouter);
+app.use('/tracking', trackingRouter);
+
+app.use('/api/v1/claims', claimsRouter);
+app.use('/claims', claimsRouter);
+
+app.use('/api/v1/cctv', cctvRouter);
+app.use('/cctv', cctvRouter);
+
+app.use('/api/v1/zones', zonesRouter);
+app.use('/zones', zonesRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

@@ -1,7 +1,8 @@
 /**
  * packages/shared/src/permissions.ts
  *
- * Authoritative role-permission matrix derived from Blueprint Section 12.
+ * Authoritative role-permission matrix derived from Blueprint Section 12
+ * and Step 19 Foundation requirements.
  * Defines capabilities, mapping to allowed roles, and warehouse-scoping requirements.
  */
 
@@ -10,7 +11,9 @@ export type Role =
   | 'Manager'
   | 'Warehouse_Operator'
   | 'Procurement_Approver'
-  | 'Administrator';
+  | 'Administrator'
+  | 'DRIVER'
+  | 'SUPPLIER';
 
 export const ALL_ROLES: Role[] = [
   'Analyst',
@@ -18,6 +21,8 @@ export const ALL_ROLES: Role[] = [
   'Warehouse_Operator',
   'Procurement_Approver',
   'Administrator',
+  'DRIVER',
+  'SUPPLIER',
 ];
 
 export type Capability =
@@ -51,7 +56,22 @@ export type Capability =
   | 'ingest_text'
   | 'verify_audit_chain'
   | 'generate_customer_notices'
-  | 'release_customer_notices';
+  | 'release_customer_notices'
+  // Step 19 Foundation Capabilities
+  | 'tracking.read.own'
+  | 'tracking.read.warehouse'
+  | 'tracking.read.all'
+  | 'driver.ping'
+  | 'driver.incident'
+  | 'reroute.decide'
+  | 'cctv.ingest'
+  | 'cctv.view'
+  | 'claim.read.own'
+  | 'claim.respond'
+  | 'claim.decide'
+  | 'capacity.view'
+  | 'zone.edit'
+  | 'presence.read';
 
 export interface PermissionDefinition {
   roles: Role[];
@@ -190,23 +210,85 @@ export const ROLE_PERMISSIONS: Record<Capability, PermissionDefinition> = {
     roles: ['Manager'],
     description: 'Release verified customer notices to the simulated outbox',
   },
+
+  // ── Step 19 Capabilities ──────────────────────────────────────────────────
+  'tracking.read.own': {
+    roles: ['DRIVER', 'Manager', 'Administrator'],
+    description: 'Read own truck GPS position and reroute proposals',
+  },
+  'tracking.read.warehouse': {
+    roles: ['Warehouse_Operator', 'Manager', 'Administrator'],
+    warehouseScoped: true,
+    description: 'Read live tracking for trucks in corridor feeding assigned warehouse',
+  },
+  'tracking.read.all': {
+    roles: ['Analyst', 'Manager', 'Administrator'],
+    description: 'Read all active driver pings, truck routes and tracking telemetry',
+  },
+  'driver.ping': {
+    roles: ['DRIVER'],
+    description: 'Submit GPS coordinate ping for own truck',
+  },
+  'driver.incident': {
+    roles: ['DRIVER'],
+    description: 'Submit breakdown, accident or delay incident report for own truck',
+  },
+  'reroute.decide': {
+    roles: ['Manager', 'Administrator'],
+    description: 'Approve or reject automated truck reroute proposal',
+  },
+  'cctv.ingest': {
+    roles: ['Warehouse_Operator', 'Analyst', 'Administrator'],
+    warehouseScoped: true,
+    description: 'Ingest CCTV video clips and trigger damage detection pipeline',
+  },
+  'cctv.view': {
+    roles: ['Warehouse_Operator', 'Analyst', 'Manager', 'Administrator'],
+    warehouseScoped: true,
+    description: 'Inspect CCTV damage detection events, frames and evidence items',
+  },
+  'claim.read.own': {
+    roles: ['SUPPLIER', 'Manager', 'Procurement_Approver', 'Administrator'],
+    description: 'Read supplier claims scoped to own supplier_id',
+  },
+  'claim.respond': {
+    roles: ['SUPPLIER'],
+    description: 'Submit textual defense or acceptance response to supplier claim',
+  },
+  'claim.decide': {
+    roles: ['Procurement_Approver', 'Manager', 'Administrator'],
+    description: 'Adjudicate, accept, reject or escalate supplier claims',
+  },
+  'capacity.view': {
+    roles: ['Warehouse_Operator', 'Analyst', 'Manager', 'Administrator'],
+    warehouseScoped: true,
+    description: 'View warehouse zone polygons, slot capacity and current occupancy',
+  },
+  'zone.edit': {
+    roles: ['Warehouse_Operator', 'Administrator'],
+    warehouseScoped: true,
+    description: 'Create, modify and re-polygon warehouse operational zones',
+  },
+  'presence.read': {
+    roles: ['Analyst', 'Manager', 'Warehouse_Operator', 'Administrator'],
+    description: 'View live user presence across control tower desks and zones',
+  },
 };
 
 /**
  * Checks whether a given role possesses a specific capability.
  */
-export function hasPermission(role: Role, capability: Capability): boolean {
+export function hasPermission(role: Role | string, capability: Capability): boolean {
   const perm = ROLE_PERMISSIONS[capability];
   if (!perm) return false;
-  return perm.roles.includes(role);
+  return perm.roles.includes(role as Role);
 }
 
 /**
  * Returns all capabilities granted to a specific role.
  */
-export function getPermissionsForRole(role: Role): Capability[] {
+export function getPermissionsForRole(role: Role | string): Capability[] {
   return (Object.keys(ROLE_PERMISSIONS) as Capability[]).filter((cap) =>
-    ROLE_PERMISSIONS[cap].roles.includes(role)
+    hasPermission(role, cap)
   );
 }
-

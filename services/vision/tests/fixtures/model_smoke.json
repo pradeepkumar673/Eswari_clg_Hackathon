@@ -1,0 +1,55 @@
+{
+  "model_sha256": "84c9b943672e676f32c97dc36a81aae8766bdd96646e1b5e552de17aebca289c",
+  "class_names": {
+    "0": "Damaged",
+    "1": "Normal"
+  },
+  "sample_image": "classexamples.png",
+  "detection_count": 4,
+  "detections": [
+    {
+      "class_id": 0,
+      "class_name": "Damaged",
+      "confidence": 0.945,
+      "box": [
+        352.48,
+        20.03,
+        719.26,
+        302.41
+      ]
+    },
+    {
+      "class_id": 0,
+      "class_name": "Damaged",
+      "confidence": 0.9054,
+      "box": [
+        389.14,
+        344.43,
+        690.58,
+        612.98
+      ]
+    },
+    {
+      "class_id": 1,
+      "class_name": "Normal",
+      "confidence": 0.8447,
+      "box": [
+        70.86,
+        45.65,
+        275.1,
+        315.82
+      ]
+    },
+    {
+      "class_id": 1,
+      "class_name": "Normal",
+      "confidence": 0.8149,
+      "box": [
+        37.37,
+        366.67,
+        208.75,
+        469.38
+      ]
+    }
+  ]
+}

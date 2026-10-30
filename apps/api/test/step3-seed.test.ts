@@ -109,9 +109,9 @@ describe('Test 2 — counts match blueprint', () => {
     expect(count).toBe(20);
   });
 
-  it('exactly 7 users (1 Analyst, 2 Managers, 1 Operator, 2 Procurement, 1 Admin)', async () => {
+  it('exactly 10 users (1 Analyst, 2 Managers, 1 Operator, 2 Procurement, 1 Admin, 2 Drivers, 1 Supplier)', async () => {
     const count = await User.countDocuments();
-    expect(count).toBe(7);
+    expect(count).toBe(10);
 
     const byRole = await User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]);
     const roleMap: Record<string, number> = {};
@@ -122,6 +122,8 @@ describe('Test 2 — counts match blueprint', () => {
     expect(roleMap['Warehouse_Operator']).toBe(1);
     expect(roleMap['Procurement_Approver']).toBe(2);
     expect(roleMap['Administrator']).toBe(1);
+    expect(roleMap['DRIVER']).toBe(2);
+    expect(roleMap['SUPPLIER']).toBe(1);
   });
 
   it('SHP-204 exists: SUP-1 → WH-HOS, 170 units IN_TRANSIT', async () => {

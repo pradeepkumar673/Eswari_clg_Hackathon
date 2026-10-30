@@ -69,7 +69,7 @@ beforeAll(async () => {
   whHosId = whHos!._id.toString();
   whChnId = whChn!._id.toString();
 
-  // Obtain tokens for all 7 users
+  // Obtain tokens for all users (including new DRIVER and SUPPLIER roles)
   const usernames = [
     'analyst',
     'manager',
@@ -78,6 +78,8 @@ beforeAll(async () => {
     'procurement',
     'procurement2',
     'admin',
+    'drv1',
+    'sup1',
   ];
 
   for (const username of usernames) {
@@ -108,9 +110,12 @@ describe('Test 1 & 2 — Authentication (Login, Me, Demo-Switch, Bad Password)',
     { username: 'procurement', role: 'Procurement_Approver' },
     { username: 'procurement2', role: 'Procurement_Approver' },
     { username: 'admin', role: 'Administrator' },
+    { username: 'drv1', role: 'DRIVER' },
+    { username: 'drv2', role: 'DRIVER' },
+    { username: 'sup1', role: 'SUPPLIER' },
   ];
 
-  it('authenticates all 7 seeded users successfully', async () => {
+  it('authenticates all seeded users successfully', async () => {
     for (const u of allUsers) {
       const res = await request(app)
         .post('/api/v1/auth/login')

@@ -4,6 +4,7 @@
  * Authentication, authorization, and permission checking middleware.
  * - Re-reads the user from MongoDB on every request so role updates take effect instantly.
  * - Enforces the role-permission matrix with warehouse-scoping for Warehouse_Operator.
+ * - Enforces driver-scoping for DRIVER and supplier-scoping for SUPPLIER.
  * - Automatically writes an append-only audit log entry (ACCESS_DENIED) on 401 / 403.
  */
 
@@ -12,6 +13,7 @@ import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { config } from '../config.js';
 import { User, IUser } from '../models/users.js';
+import { Warehouse } from '../models/warehouses.js';
 import { Capability, hasPermission, ROLE_PERMISSIONS, Role } from '@disruptioniq/shared';
 import { writeAudit } from '../services/audit.js';
 
@@ -21,6 +23,9 @@ export interface AuthenticatedUser {
   username: string;
   role: Role;
   warehouse_id: mongoose.Types.ObjectId | null;
+  driver_id: string | null;
+  truck_id: string | null;
+  supplier_id: string | null;
   display_name: string;
 }
 
@@ -56,6 +61,9 @@ export async function authenticateToken(
       username: string;
       role: Role;
       warehouse_id: string | null;
+      driver_id?: string | null;
+      truck_id?: string | null;
+      supplier_id?: string | null;
     };
 
     // Re-read user from DB on every request (changed role takes effect immediately)
@@ -72,6 +80,9 @@ export async function authenticateToken(
       username: userDoc.username,
       role: userDoc.role,
       warehouse_id: userDoc.warehouse_id,
+      driver_id: userDoc.driver_id || null,
+      truck_id: userDoc.truck_id || null,
+      supplier_id: userDoc.supplier_id || null,
       display_name: userDoc.display_name,
     };
 
@@ -122,7 +133,15 @@ export function requirePermission(capability: Capability) {
         const userWhStr = req.user.warehouse_id.toString();
         const targetWhStr = targetWarehouse.toString();
 
-        if (userWhStr !== targetWhStr) {
+        let isMatch = userWhStr === targetWhStr;
+        if (!isMatch) {
+          const whDoc = await Warehouse.findById(req.user.warehouse_id).lean();
+          if (whDoc && whDoc.code === targetWhStr) {
+            isMatch = true;
+          }
+        }
+
+        if (!isMatch) {
           await logAccessDenied(
             req,
             `Operator warehouse mismatch: user ${userWhStr} attempted action on warehouse ${targetWhStr}`,
@@ -134,6 +153,65 @@ export function requirePermission(capability: Capability) {
           });
           return;
         }
+      }
+    }
+
+    // 3. Check driver scoping for DRIVER
+    if (req.user.role.toUpperCase() === 'DRIVER') {
+      const requestedDriver =
+        req.params.driverId ||
+        req.body?.driver_id ||
+        (req.query?.driver_id as string | undefined);
+      const requestedTruck =
+        req.params.truckId ||
+        req.body?.truck_id ||
+        (req.query?.truck_id as string | undefined);
+
+      if (requestedDriver && req.user.driver_id && requestedDriver !== req.user.driver_id) {
+        await logAccessDenied(
+          req,
+          `Driver mismatch: user ${req.user.driver_id} requested data for ${requestedDriver}`,
+          capability,
+        );
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'Driver is restricted to own truck and tracking data',
+        });
+        return;
+      }
+
+      if (requestedTruck && req.user.truck_id && requestedTruck !== req.user.truck_id) {
+        await logAccessDenied(
+          req,
+          `Truck mismatch: user ${req.user.truck_id} requested data for ${requestedTruck}`,
+          capability,
+        );
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'Driver is restricted to own truck and tracking data',
+        });
+        return;
+      }
+    }
+
+    // 4. Check supplier scoping for SUPPLIER
+    if (req.user.role.toUpperCase() === 'SUPPLIER') {
+      const requestedSupplier =
+        req.params.supplierId ||
+        req.body?.supplier_id ||
+        (req.query?.supplier_id as string | undefined);
+
+      if (requestedSupplier && req.user.supplier_id && requestedSupplier !== req.user.supplier_id) {
+        await logAccessDenied(
+          req,
+          `Supplier mismatch: user ${req.user.supplier_id} requested data for ${requestedSupplier}`,
+          capability,
+        );
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'Supplier is restricted to own claims and data',
+        });
+        return;
       }
     }
 
@@ -166,6 +244,46 @@ export function requireAnyPermission(capabilities: Capability[]) {
         message: `Role '${req.user.role}' is not authorized`,
       });
       return;
+    }
+
+    // Scoping for DRIVER
+    if (req.user.role.toUpperCase() === 'DRIVER') {
+      const requestedDriver =
+        req.params.driverId ||
+        req.body?.driver_id ||
+        (req.query?.driver_id as string | undefined);
+      if (requestedDriver && req.user.driver_id && requestedDriver !== req.user.driver_id) {
+        await logAccessDenied(
+          req,
+          `Driver mismatch: user ${req.user.driver_id} requested data for ${requestedDriver}`,
+          capabilities[0],
+        );
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'Driver is restricted to own truck and tracking data',
+        });
+        return;
+      }
+    }
+
+    // Scoping for SUPPLIER
+    if (req.user.role.toUpperCase() === 'SUPPLIER') {
+      const requestedSupplier =
+        req.params.supplierId ||
+        req.body?.supplier_id ||
+        (req.query?.supplier_id as string | undefined);
+      if (requestedSupplier && req.user.supplier_id && requestedSupplier !== req.user.supplier_id) {
+        await logAccessDenied(
+          req,
+          `Supplier mismatch: user ${req.user.supplier_id} requested data for ${requestedSupplier}`,
+          capabilities[0],
+        );
+        res.status(403).json({
+          error: 'Forbidden',
+          message: 'Supplier is restricted to own claims and data',
+        });
+        return;
+      }
     }
 
     next();
@@ -206,4 +324,3 @@ async function logAccessDenied(
     // Fail silently so audit write error doesn't mask 401/403 response
   }
 }
-

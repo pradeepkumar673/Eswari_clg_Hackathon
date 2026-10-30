@@ -27,6 +27,7 @@ _Last updated: 2026-10-30 by Step 18 (Final Audit — Complete)_
 | 16 | Full acceptance suite | **STEP 16: PASS** |
 | 17 | Hardening, full-repo review and demo readiness | **STEP 17: PASS** |
 | 18 | Final audit | **STEP 18: PASS (ALL STEPS COMPLETE)** |
+| 19 | Foundation for CCTV, Driver Tracking, Role Dashboards, Leaflet Capacity Mapping | **STEP 19: PASS** |
 
 ---
 
@@ -300,13 +301,26 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
   - `Screen 3 (Intake and Quarantine)`: `apps/web/src/screens/IntakeScreen.tsx` — CSV/JSON entity uploader, B11 quality report, row-level quarantine triage table with suggested fixes, carrier webhook storm simulator, and B15 text ingestion paste box.
   - `Screen 4 (Disruption Investigation)`: `apps/web/src/screens/InvestigationScreen.tsx` — Belief-ETA reconciler card, event timeline with status chips (`APPLIED`, `DUPLICATE`, `STALE`, `CONFLICT`, `REJECTED`), conflict resolution buttons, B8 supplier scorecard, A5 decision replay scrubber with reconstructed past state, and bilingual voice field report confirmation (English & தமிழ்).
 
+### Step 19 — Foundation for CCTV, Driver Tracking, Role Dashboards, Leaflet Capacity Mapping (PASS)
+- **Part A (Open-Source Reuse Scout & Model Download)**:
+  - Cloned and license-audited 4 candidate repositories into `tmp/reuse/`: `Parcel-Damage-Detection` (`REFERENCE_ONLY`, missing license), `Box-Detection-in-Warehouse` (`REFERENCE_ONLY`, missing license), `Campus-Bus-Tracking-System` (`REFERENCE_ONLY`, coursework without open license), `codewithbalaji/realtime_tracker` (`NOT_USED`, repository removed/404). All decisions recorded in `docs/REUSE.md`.
+  - Installed dependencies: `leaflet`, `react-leaflet`, `@geoman-io/leaflet-geoman-free`, `ws` via npm; `ultralytics` (AGPL-3.0 noted), `opencv-python-headless`, `huggingface_hub` via Python.
+  - Downloaded YOLOv11 PackageDamage model weights (`cvtechniques/PackageDamage`, MIT) to `services/vision/models/best.pt`.
+  - SHA-256 recorded: `84c9b943672e676f32c97dc36a81aae8766bdd96646e1b5e552de17aebca289c`. Model classes: `{0: 'Damaged', 1: 'Normal'}`.
+  - Ran smoke test inference against sample fixture; saved output image and `services/vision/tests/fixtures/model_smoke.json` with 4 bounding boxes.
+- **Part B (Foundation: Roles, Data Models, Real-Time WebSocket Shell)**:
+  - **RBAC Matrix Expansion**: Added `DRIVER` (sees only own truck, posts pings/incidents, cannot approve) and `SUPPLIER` (read-only on own claims, can submit responses) roles to `packages/shared/src/permissions.ts`. Added 14 capabilities (`tracking.read.own`, `tracking.read.warehouse`, `tracking.read.all`, `driver.ping`, `driver.incident`, `reroute.decide`, `cctv.ingest`, `cctv.view`, `claim.read.own`, `claim.respond`, `claim.decide`, `capacity.view`, `zone.edit`, `presence.read`). Scoped Warehouse Operator for `tracking.read.warehouse` and `cctv.view`.
+  - **Seed Additions**: Seed script extended with synthetic `lat`/`lng` for all 3 warehouses and 4 suppliers; calibrated transfer lane road distances (BLR↔HOS 40km, CHN↔HOS 300km, BLR↔CHN 350km); `units_per_slot = 10` on all SKUs; seeded users `drv1` (bound to `SHP-204`), `drv2` (bound to `SHP-310`), and `sup1` (bound to `SUP-1`); 3 damage policies (`MINOR` 0h, `MAJOR` 24h, `SEVERE` 48h); 3 zones for `WH-HOS` (`RECEIVING` 50, `STORAGE` 120, `DISPATCH` 40). Zero initial occupancy, alerts, claims, plans, or pings.
+  - **11 Collections & Mongoose Models**: Created `cctv_clips`, `cctv_events`, `evidence_items`, `supplier_claims`, `driver_pings`, `driver_incidents`, `reroute_proposals`, `zones`, `zone_stock_assignments`, `inbound_slot_plans`, and `damage_policies` with accompanying Zod schemas in `packages/shared`. Implemented Mongo `$expr` validator on `zones` (`reserved_inbound_slots <= capacity_slots`) and partial unique index on `inbound_slot_plans` (`shipment_id` where `status = 'PLANNED'`).
+  - **Real-Time WebSocket Shell (`/ws`)**: Attached WebSocket server via `ws` to HTTP server. Enforces mandatory `{type: "auth", token}` first message within 5s timeout, live permission/role checks against database on subscriptions, and role/scope filtering across topics (`tracking`, `cctv`, `zones`, `presence`, `alerts`). Tokens never exposed in URLs or logs.
+  - **Environment Configuration**: Added `MAP_TILE_URL`, `GEOFENCE_RADIUS_M=2000`, `SIM_TRUCK_KMH=50`, `CCTV_EVIDENCE_DIR=./.data/evidence`, `VISION_URL=http://127.0.0.1:8010` to `.env` and `.env.example`.
+  - **Verification**: `apps/api/test/step19-foundation.test.ts` (13 tests) passed; all 11 test suites passing (184 tests total); Python solver tests passing (13 tests); verified live WebSocket connection acceptance and unauthenticated rejection (`scripts/verify-ws.ts`).
+
 ---
 
 ## NEXT STEP
 
-**ALL STEPS (0 to 18) ARE 100% COMPLETE & VERIFIED**
-- System is demo-ready and audit-approved.
-- See `docs/FINAL_AUDIT.md` and `DEMO.md` for full operational details.
+**Ready for Step 20: Implementation of CCTV damage detection pipeline, driver tracking engine, role dashboards, and Leaflet capacity mapping.**
 
 ---
 

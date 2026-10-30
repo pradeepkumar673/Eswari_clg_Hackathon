@@ -7,6 +7,8 @@ export interface ISupplier extends Document {
   lead_time_hours: number;
   map_x: number;
   map_y: number;
+  lat?: number;
+  lng?: number;
   on_time_rate: number | null;
   quality_score: number | null;
   is_active: boolean;
@@ -20,10 +22,12 @@ const supplierSchema = new Schema<ISupplier>({
   lead_time_hours: { type: Number, required: true },
   map_x: { type: Number, required: true, min: 0, max: 1000 },
   map_y: { type: Number, required: true, min: 0, max: 1000 },
+  lat: { type: Number, default: null },
+  lng: { type: Number, default: null },
   on_time_rate: { type: Number, default: null, min: 0, max: 1 },
   quality_score: { type: Number, default: null, min: 0, max: 1 },
   is_active: { type: Boolean, default: true },
   created_at: { type: Date, default: Date.now },
-}, { collection: 'suppliers', strict: false });
+}, { collection: 'suppliers' });
 
 export const Supplier = mongoose.model<ISupplier>('Supplier', supplierSchema);

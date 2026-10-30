@@ -44,6 +44,9 @@ coverage/
 # Vite
 .vite/
 
+# Temporary
+tmp/
+
 # TypeScript
 *.tsbuildinfo
 
