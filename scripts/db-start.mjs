@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
@@ -39,9 +39,17 @@ async function startMongod() {
     return;
   }
 
+  // Remove diagnostic data if exists to prevent FTDC crash
+  const diagDir = path.join(DATA_DIR, 'diagnostic.data');
+  if (fs.existsSync(diagDir)) {
+    try {
+      fs.rmSync(diagDir, { recursive: true, force: true });
+    } catch (_) {}
+  }
+
   console.log(`Starting mongod on port ${PORT} with replSet ${REPL_SET}...`);
-  // On Windows, use PowerShell Start-Process to keep it persistent in background
-  const psCmd = `Start-Process -FilePath "${MONGOD_PATH}" -ArgumentList "--dbpath \\"${DATA_DIR}\\" --port ${PORT} --replSet ${REPL_SET} --bind_ip 127.0.0.1 --logpath \\"${LOG_FILE}\\"" -WindowStyle Hidden`;
+  // On Windows, use PowerShell Start-Process with array args to keep it persistent in background
+  const psCmd = `Start-Process -FilePath '${MONGOD_PATH}' -ArgumentList @('--dbpath', '${DATA_DIR}', '--port', '${PORT}', '--replSet', '${REPL_SET}', '--bind_ip', '127.0.0.1', '--logpath', '${LOG_FILE}', '--setParameter', 'diagnosticDataCollectionEnabled=false') -WindowStyle Hidden`;
   execSync(`powershell -NoProfile -Command "${psCmd}"`);
 
   let ready = false;
@@ -61,7 +69,9 @@ async function startMongod() {
 async function initiateReplicaSet() {
   try {
     const { MongoClient } = await import('mongodb');
-    const client = new MongoClient(`mongodb://127.0.0.1:${PORT}/?directConnection=true`);
+    const client = new MongoClient(`mongodb://127.0.0.1:${PORT}/?directConnection=true`, {
+      serverSelectionTimeoutMS: 5000,
+    });
     await client.connect();
     const admin = client.db('admin');
 
@@ -74,10 +84,18 @@ async function initiateReplicaSet() {
         await admin.command({
           replSetInitiate: {
             _id: REPL_SET,
-            members: [{ _id: 0, host: `127.0.0.1:${PORT}` }]
-          }
+            members: [{ _id: 0, host: `127.0.0.1:${PORT}` }],
+          },
         });
-        console.log(`Replica set "${REPL_SET}" initiated successfully.`);
+        console.log(`Replica set "${REPL_SET}" initiated successfully. Waiting for primary...`);
+        for (let i = 0; i < 15; i++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const s = await admin.command({ hello: 1 });
+          if (s.isWritablePrimary) {
+            console.log('Node is now PRIMARY.');
+            break;
+          }
+        }
       } else {
         console.log('ReplSet status:', err.message);
       }

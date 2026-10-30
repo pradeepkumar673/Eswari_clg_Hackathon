@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+export * from './schemas/core.js';
+export * from './schemas/events.js';
+export * from './schemas/recovery.js';
+
 export const HealthResponseSchema = z.object({
   status: z.enum(['ok', 'degraded', 'error']),
   timestamp: z.string(),
@@ -15,4 +19,3 @@ export const HealthResponseSchema = z.object({
 });
 
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
-

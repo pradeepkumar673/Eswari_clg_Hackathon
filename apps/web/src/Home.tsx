@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HealthResponse } from '@disruptioniq/shared';
 
 export function Home() {

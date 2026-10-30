@@ -1,6 +1,6 @@
 # DisruptionIQ Verified Recovery Desk — Project State
 
-_Last updated: 2026-10-30 by Step 0 (Brain)_
+_Last updated: 2026-10-30 by Step 2 (Data Model & Security Roles)_
 
 ---
 
@@ -10,7 +10,7 @@ _Last updated: 2026-10-30 by Step 0 (Brain)_
 |------|-------|--------|
 | 0 | Brain | **STEP 0: PASS** |
 | 1 | Scaffold and Mongo replica set | **STEP 1: PASS** |
-| 2 | Data model and security roles | NOT STARTED |
+| 2 | Data model and security roles | **STEP 2: PASS** |
 | 3 | Seed data | NOT STARTED |
 | 4 | Auth, RBAC, audit hash chain | NOT STARTED |
 | 5 | Frontend shell and design system | NOT STARTED |
@@ -42,9 +42,39 @@ _Last updated: 2026-10-30 by Step 0 (Brain)_
 
 ---
 
-## IN PROGRESS
+## COMPLETED STEPS
 
-**Step 2 — Data model, indexes, validators, security roles** (NOT STARTED — next)
+### Step 0 — Brain (PASS)
+- Architecture blueprint, PRD, and operational invariants established.
+
+### Step 1 — Scaffold and Mongo replica set (PASS)
+- Monorepo configured with Turborepo, Vite React TS frontend, Express TS backend, FastAPI solver, shared packages, Vitest + Pytest.
+
+### Step 2 — Data model, indexes, validators, security roles (PASS)
+- **Mongoose Models**: 45+ models across `apps/api/src/models/` (users, suppliers, warehouses, skus, supplier-skus, transfer-lanes, shipments, shipment-lines, inventory-balances, orders, order-lines, source-trust, shipment-events, field-reports, import-batches, import-rows, disruptions, order-risk-snapshots, llm-cache, recovery-plans, plan-actions, plan-claims, stock-reservations, approvals, execution-ledger, audit-logs, notifications, route-options, plan-tradeoffs, allocation-conflicts, allocation-claims, order-promise-dates, lineage-edges, historical-cases, fingerprints, disruption-fingerprints, guardrail-policies, guardrail-checks, spof-snapshots, stress-runs, alerts, stock-thresholds, risk-policies, supplier-scorecards, approval-delegations, simulation-runs, customer-notices, settings).
+- **Zod Schemas**: Full schemas exported from `packages/shared/src/schemas/` (`core.ts`, `events.ts`, `recovery.ts`) and re-exported from `packages/shared/src/index.ts`.
+- **Database Constraints & Validators**:
+  - `inventory_balances`: strict collection validator `$expr: { $and: [ { $gte: ['$reserved', 0] }, { $gte: ['$on_hand', 0] }, { $lte: ['$reserved', '$on_hand'] } ] }`.
+  - `shipment_events`: unique compound index `{ source: 1, external_event_id: 1 }` with partial filter `{ external_event_id: { $type: 'string' } }`.
+  - `alerts`: partial unique index `{ alert_key: 1 }` with filter `{ status: 'OPEN' }`.
+  - `import_batches`: unique index `{ batch_number: 1 }`.
+  - Hash-chain fields (`prev_hash`, `row_hash`, `seq`) on `audit_logs` and `execution_ledger`.
+- **Transactions & Concurrency**:
+  - `apps/api/src/db/withTransaction.ts`: transaction helper with automatic retry on `TransientTransactionError` and `UnknownTransactionCommitResult`.
+  - Sorted `(warehouse_id, sku_id)` lock order documented to avoid distributed deadlocks during multi-warehouse reservations.
+- **Security Roles Script**:
+  - `scripts/db-security.mjs`: creates `rw_except_appendonly` (full CRUD minus update/remove on append-only collections `audit_logs`, `execution_ledger`, `shipment_events`), `readonly_plus_sim` (read-only plus insert on `simulation_runs`), and users `app_rw`, `app_readonly`, `demo_admin`.
+- **Tests**:
+  - 19 automated tests in `apps/api/test/step2-data-model.test.ts` covering: duplicate event rejection, collection validator enforcement, security role configurations, alert partial unique indexes, and transaction rollback atomicity. All 19 passing.
+  - Monorepo full test suite (22 vitest tests + 1 pytest test) passing cleanly.
+
+---
+
+## NEXT STEP
+
+**Step 3 — Seed data (all scenarios, add-ons, micro-features)**
+- Target Model: Sonnet 4.6
+- Deliverable: Comprehensive seed script (`scripts/seed.ts` or `scripts/db-seed.mjs`) populating realistic Indian supply chain topology (Chennai, Hosur, Sriperumbudur, Bengaluru), orders, SKUs, inventory balances, disruption scenarios, and demo users with bcrypt passwords.
 
 ---
 
@@ -61,12 +91,12 @@ None.
 | Command | What it does |
 |---------|-------------|
 | `git log --oneline -15` | View recent commits |
-| `npm run test` | Run all tests (configured in Step 1) |
-| `npm run scan:placeholders` | Scan for forbidden placeholder strings (configured in Step 1) |
-| `npm run db:start` | Start local MongoDB replica set (configured in Step 1) |
+| `npm run test` | Run all tests |
+| `npm run scan:placeholders` | Scan for forbidden placeholder strings |
+| `npm run db:start` | Start local MongoDB replica set |
 | `npm run db:seed` | Seed demo data (configured in Step 3) |
 | `npm run db:reset` | Reset to clean demo state (configured in Step 3) |
-| `npm run dev` | Start api + web + solver together (configured in Step 1) |
+| `npm run dev` | Start api + web + solver together |
 | `npm run acceptance` | Run all 41 acceptance tests (configured in Step 27) |
 | `npm run redteam` | Run red-team security suite (configured in Step 21) |
 | `npm run stress` | Run stress injector suite (configured in Step 21) |
@@ -78,7 +108,7 @@ None.
 
 ## ENV VARS
 
-Full list in `.env.example` (created in Step 1). Key variables:
+Full list in `.env.example`. Key variables:
 
 | Variable | Required | Notes |
 |----------|----------|-------|

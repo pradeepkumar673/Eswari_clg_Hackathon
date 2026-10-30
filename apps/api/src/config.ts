@@ -9,6 +9,8 @@ const ConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
   MONGODB_URI: z.string().default('mongodb://127.0.0.1:27017/disruptioniq?replicaSet=rs0'),
+  MONGODB_URI_READONLY: z.string().default('mongodb://127.0.0.1:27017/disruptioniq?replicaSet=rs0'),
+  MONGODB_URI_ADMIN: z.string().default('mongodb://127.0.0.1:27017/disruptioniq?replicaSet=rs0'),
   JWT_SECRET: z.string().min(16).default('disruptioniq_super_secret_jwt_key_at_least_32_chars!'),
   WEBHOOK_SECRET: z.string().default('disruptioniq_carrier_webhook_secret_key_123'),
   SOLVER_URL: z.string().url().default('http://127.0.0.1:8000'),
