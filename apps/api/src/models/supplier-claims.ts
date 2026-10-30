@@ -11,6 +11,8 @@ export interface ISupplierClaim extends Document {
   status: 'OPEN' | 'ACCEPTED' | 'REJECTED' | 'RESPONDED';
   supplier_response: string | null;
   decided_by: string | null;
+  linked_by?: string | null;
+  rejection_reason?: string | null;
   evidence_ids: string[];
   version: number;
   created_at: Date;
@@ -32,6 +34,8 @@ const supplierClaimSchema = new Schema<ISupplierClaim>({
   },
   supplier_response: { type: String, default: null },
   decided_by: { type: String, default: null },
+  linked_by: { type: String, default: null },
+  rejection_reason: { type: String, default: null },
   evidence_ids: { type: [String], default: [] },
   version: { type: Number, default: 1, min: 1 },
   created_at: { type: Date, default: Date.now },

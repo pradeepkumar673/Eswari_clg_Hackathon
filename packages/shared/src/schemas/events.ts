@@ -14,7 +14,8 @@ export const ShipmentEventSourceSchema = z.enum([
   'FIELD_REPORT',
   'SUPPLIER_PORTAL',
   'CSV',
-  'EMAIL_TEXT'
+  'EMAIL_TEXT',
+  'CCTV'
 ]);
 export type ShipmentEventSource = z.infer<typeof ShipmentEventSourceSchema>;
 

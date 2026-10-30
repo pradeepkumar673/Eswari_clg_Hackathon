@@ -27,7 +27,7 @@ const ShipmentEventSchema = new Schema<IShipmentEvent>(
     source: {
       type: String,
       required: true,
-      enum: ['CARRIER_API', 'FIELD_REPORT', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT'],
+      enum: ['CARRIER_API', 'FIELD_REPORT', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT', 'CCTV'],
     },
     external_event_id: {
       type: String,

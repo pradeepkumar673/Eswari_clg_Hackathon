@@ -173,7 +173,8 @@ export interface WriteLedgerParams {
     | 'TRANSFER_COMPLETE'
     | 'ROLLBACK'
     | 'INVENTORY_CORRECTION'
-    | 'COMPENSATE';
+    | 'COMPENSATE'
+    | 'QUARANTINE';
   warehouseId?: mongoose.Types.ObjectId | string | null;
   skuId?: mongoose.Types.ObjectId | string | null;
   deltaOnHand?: number | null;

@@ -27,10 +27,16 @@ import { InventoryBalance } from '../models/inventory-balances.js';
 import { FieldReport } from '../models/field-reports.js';
 import { AuditLog } from '../models/audit-logs.js';
 import { TransferLane } from '../models/transfer-lanes.js';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { getBandForScore } from '../services/impactEngine.js';
 import { getDecisionReplay } from '../services/replay.js';
 import { getSimilarCases, closeDisruptionAndSaveCase } from '../services/playbook.js';
 import { getDisruptionFingerprints } from '../services/fingerprints.js';
+import { EvidenceItem } from '../models/evidence-items.js';
+import { CctvEvent } from '../models/cctv-events.js';
+import { Warehouse } from '../models/warehouses.js';
+import { config } from '../config.js';
 
 export const disruptionsRouter = Router();
 
@@ -217,6 +223,131 @@ riskPolicyRouter.put(
 
 // Evidence Router (mounted under /evidence)
 export const evidenceRouter = Router();
+
+// GET /evidence/:id/file — Stream evidence file to roles with cctv.view (warehouse-scoped)
+evidenceRouter.get(
+  '/:id/file',
+  authenticateToken,
+  requirePermission('cctv.view'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
+      if (!item) {
+        res.status(404).json({ error: 'Not Found', message: `Evidence item ${req.params.id} not found` });
+        return;
+      }
+
+      if (req.user?.role === 'Warehouse_Operator' && req.user.warehouse_id) {
+        const cctvEvt = await CctvEvent.findOne({ evidence_ids: item.evidence_id }).lean();
+        if (cctvEvt) {
+          const userWhStr = req.user.warehouse_id.toString();
+          let isMatch = userWhStr === cctvEvt.warehouse_id;
+          if (!isMatch) {
+            const whDoc = await Warehouse.findById(req.user.warehouse_id).lean();
+            if (whDoc && whDoc.code === cctvEvt.warehouse_id) {
+              isMatch = true;
+            }
+          }
+          if (!isMatch) {
+            res.status(403).json({ error: 'Forbidden', message: 'Warehouse operator cannot access evidence from other warehouses' });
+            return;
+          }
+        }
+      }
+
+      if (!fs.existsSync(item.path)) {
+        res.status(404).json({ error: 'Not Found', message: 'Evidence file not found on disk' });
+        return;
+      }
+
+      res.setHeader('Content-Type', 'image/jpeg');
+      fs.createReadStream(item.path).pipe(res);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// GET /evidence/:id/verify — Recompute hash of evidence file and detect tampering
+evidenceRouter.get(
+  '/:id/verify',
+  authenticateToken,
+  requirePermission('cctv.view'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
+      if (!item) {
+        res.status(404).json({ error: 'Not Found', message: `Evidence item ${req.params.id} not found` });
+        return;
+      }
+
+      if (!fs.existsSync(item.path)) {
+        res.status(404).json({ error: 'Not Found', message: 'Evidence file not found on disk' });
+        return;
+      }
+
+      const fileBuffer = fs.readFileSync(item.path);
+      const actualSha = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+      if (actualSha === item.sha256) {
+        res.json({
+          evidence_id: item.evidence_id,
+          expected_sha256: item.sha256,
+          actual_sha256: actualSha,
+          status: 'VERIFIED',
+          match: true,
+        });
+      } else {
+        res.json({
+          evidence_id: item.evidence_id,
+          expected_sha256: item.sha256,
+          actual_sha256: actualSha,
+          status: 'TAMPER_DETECTED',
+          match: false,
+        });
+      }
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// POST /evidence/:id/tamper — In DEMO_MODE only, corrupt an evidence file to verify tamper detection
+evidenceRouter.post(
+  '/:id/tamper',
+  authenticateToken,
+  requirePermission('cctv.view'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!config.DEMO_MODE) {
+        res.status(403).json({ error: 'Forbidden', message: 'Tamper helper is only available in DEMO_MODE' });
+        return;
+      }
+
+      const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
+      if (!item) {
+        res.status(404).json({ error: 'Not Found', message: `Evidence item ${req.params.id} not found` });
+        return;
+      }
+
+      if (!fs.existsSync(item.path)) {
+        res.status(404).json({ error: 'Not Found', message: 'Evidence file not found on disk' });
+        return;
+      }
+
+      // Corrupt file contents
+      fs.writeFileSync(item.path, Buffer.from(`TAMPERED_DEMO_CORRUPT_PAYLOAD_${Date.now()}`));
+
+      res.json({
+        evidence_id: item.evidence_id,
+        tampered: true,
+        message: 'Evidence file corrupted successfully for demonstration',
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
 
 // GET /evidence/:type/:id
 evidenceRouter.get(

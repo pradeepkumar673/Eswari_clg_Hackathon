@@ -86,7 +86,7 @@ async function reconcileInTx(
 
   // Load source trust for incoming source
   const sourceTrustDoc = await SourceTrust.findOne({ source: event.source }, null, { session });
-  const incomingTrust = sourceTrustDoc?.trust_level ?? 1;
+  const incomingTrust = event.source === 'CCTV' ? 4 : (sourceTrustDoc?.trust_level ?? 1);
   const toleranceMs = (sourceTrustDoc?.tolerance_minutes ?? 240) * MINUTES;
 
   // --- b. DUPLICATE detection ---
@@ -171,7 +171,7 @@ async function reconcileInTx(
   }
 
   // ETA-bearing events
-  const isEtaEvent = ['ETA_UPDATE', 'DELAY_REPORT', 'DELAY'].includes(event.event_type);
+  const isEtaEvent = ['ETA_UPDATE', 'DELAY_REPORT', 'DELAY', 'DAMAGE_REPORT'].includes(event.event_type);
 
   if (!isEtaEvent || !event.reported_eta) {
     // Non-ETA events: just APPLIED without changing ETA fields
@@ -233,7 +233,7 @@ async function reconcileInTx(
   }
 
   // --- d. CONFLICT check: applied event from different source disagrees by > tolerance ---
-  if (shipment.resolved_eta && shipment.eta_basis_event_id) {
+  if (event.event_type !== 'DAMAGE_REPORT' && shipment.resolved_eta && shipment.eta_basis_event_id) {
     const basisEvent = await ShipmentEvent.findOne(
       { _id: shipment.eta_basis_event_id, source: { $ne: event.source } },
       null,

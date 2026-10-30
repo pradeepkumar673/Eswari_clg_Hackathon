@@ -1,0 +1,19 @@
+{
+  "drop_scale": 15.0,
+  "deformation_threshold_deg": 20.0,
+  "weight_impact": 0.4,
+  "weight_deformation": 0.4,
+  "weight_model": 0.2,
+  "min_parcel_area": 800,
+  "max_parcel_area": 120000,
+  "max_jump_distance": 100.0,
+  "baseline_frames": 10,
+  "approx_poly_epsilon_ratio": 0.04,
+  "bands": {
+    "NONE": [0, 19],
+    "MINOR": [20, 49],
+    "MAJOR": [50, 79],
+    "SEVERE": [80, 100]
+  }
+}
+

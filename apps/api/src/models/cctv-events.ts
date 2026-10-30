@@ -15,6 +15,8 @@ export interface ICctvEvent extends Document {
   frame_end: number;
   evidence_ids: string[];
   status: 'DETECTED' | 'LINKED' | 'REJECTED';
+  linked_by?: string | null;
+  linked_at?: Date | null;
   created_at: Date;
 }
 
@@ -33,6 +35,8 @@ const cctvEventSchema = new Schema<ICctvEvent>({
   frame_end: { type: Number, required: true },
   evidence_ids: { type: [String], default: [] },
   status: { type: String, required: true, enum: ['DETECTED', 'LINKED', 'REJECTED'], default: 'DETECTED' },
+  linked_by: { type: String, default: null },
+  linked_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },
 }, { collection: 'cctv_events' });
 

@@ -412,6 +412,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
       total_units: s.total_units,
       usable_quantity: s.usable_quantity,
       is_disrupted: s.is_disrupted,
+      resolved_eta: null,
+      eta_basis_event_id: null,
     });
 
     for (const line of s.skus) {
@@ -544,6 +546,9 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
     { username: 'sup1', display_name: 'Supplier Rep 1 (Apex)', role: 'SUPPLIER' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: 'SUP-1' },
   ];
 
+  const validUsernames = userSeeds.map((u) => u.username);
+  await User.deleteMany({ username: { $nin: validUsernames } });
+
   for (const u of userSeeds) {
     await upsertOne(User, { username: u.username }, {
       username: u.username,
@@ -559,6 +564,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
   console.log('[seed] Users: 10 users (including 2 DRIVER and 1 SUPPLIER)');
 
   // ── 11. SourceTrust ───────────────────────────────────────────────────────
+  const validSources = ['FIELD_REPORT', 'CARRIER_API', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT'];
+  await SourceTrust.deleteMany({ source: { $nin: validSources } });
   await upsertMany(SourceTrust, [
     { filter: { source: 'FIELD_REPORT' }, data: { source: 'FIELD_REPORT', trust_level: 3, tolerance_minutes: 240 } },
     { filter: { source: 'CARRIER_API' }, data: { source: 'CARRIER_API', trust_level: 2, tolerance_minutes: 240 } },

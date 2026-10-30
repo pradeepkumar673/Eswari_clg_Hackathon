@@ -38,6 +38,8 @@ export const CctvEventSchema = z.object({
   frame_end: z.number().int().nonnegative(),
   evidence_ids: z.array(z.string()).default([]),
   status: CctvEventStatusSchema.default('DETECTED'),
+  linked_by: z.string().nullable().optional(),
+  linked_at: z.coerce.date().nullable().optional(),
   created_at: z.coerce.date().optional(),
 });
 export type CctvEvent = z.infer<typeof CctvEventSchema>;
@@ -74,6 +76,8 @@ export const SupplierClaimSchema = z.object({
   status: SupplierClaimStatusSchema.default('OPEN'),
   supplier_response: z.string().nullable().optional(),
   decided_by: z.string().nullable().optional(),
+  linked_by: z.string().nullable().optional(),
+  rejection_reason: z.string().nullable().optional(),
   evidence_ids: z.array(z.string()).default([]),
   version: z.number().int().nonnegative().default(1),
   created_at: z.coerce.date().optional(),

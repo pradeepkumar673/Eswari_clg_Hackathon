@@ -28,6 +28,7 @@ _Last updated: 2026-10-30 by Step 18 (Final Audit — Complete)_
 | 17 | Hardening, full-repo review and demo readiness | **STEP 17: PASS** |
 | 18 | Final audit | **STEP 18: PASS (ALL STEPS COMPLETE)** |
 | 19 | Foundation for CCTV, Driver Tracking, Role Dashboards, Leaflet Capacity Mapping | **STEP 19: PASS** |
+| 20 | CCTV Damage Detection, Reconciler Delays, Claims & Evidence Verification | **STEP 20: PASS** |
 
 ---
 
