@@ -361,6 +361,14 @@ export function DriverScreen() {
   };
 
   const reportIncident = async (kind: 'BREAKDOWN' | 'ACCIDENT') => {
+    if (fix?.accuracy_m != null && fix.accuracy_m > 100) {
+      const ok = window.confirm(
+        `Your GPS is only accurate to about ${Math.round(fix.accuracy_m)} m. ` +
+          `The breakdown will be shown at this approximate position. Report anyway?`,
+      );
+      if (!ok) return;
+    }
+
     try {
       const res = await fetch('/api/v1/driver/incidents', {
         method: 'POST',

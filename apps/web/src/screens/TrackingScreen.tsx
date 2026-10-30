@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { MapContainer, Polyline, Marker, Popup, TileLayer, CircleMarker } from 'react-leaflet';
+import { MapContainer, Polyline, Marker, Popup, TileLayer, CircleMarker, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Navigation, Clock, X, AlertTriangle, ShieldAlert, CheckCircle2 } from 'lucide-react';
@@ -380,35 +380,44 @@ export function TrackingScreen() {
 
           {/* Live breakdowns and accidents: red markers, with the driver's name */}
           {mappedIncidents.map((i) => (
-            <Marker
-              key={`inc-${i.incident_id}`}
-              position={[i.lat as number, i.lng as number]}
-              icon={incidentIcon(`${i.kind === 'ACCIDENT' ? 'ACCIDENT' : 'BREAKDOWN'} • ${i.driver_name ?? i.driver_id}`)}
-              zIndexOffset={1000}
-            >
-              <Popup>
-                <div className="p-2 text-xs space-y-1 min-w-[200px]">
-                  <div className="font-bold text-rose-800">
-                    {i.kind === 'ACCIDENT' ? 'Accident' : 'Breakdown'} • {i.truck_id}
+            <span key={`inc-group-${i.incident_id}`}>
+              {i.accuracy_m != null && (
+                <Circle
+                  center={[i.lat as number, i.lng as number]}
+                  radius={i.accuracy_m}
+                  pathOptions={{ color: '#e11d48', weight: 1, fillOpacity: 0.08 }}
+                />
+              )}
+              <Marker
+                key={`inc-${i.incident_id}`}
+                position={[i.lat as number, i.lng as number]}
+                icon={incidentIcon(`${i.kind === 'ACCIDENT' ? 'ACCIDENT' : 'BREAKDOWN'} • ${i.driver_name ?? i.driver_id}`)}
+                zIndexOffset={1000}
+              >
+                <Popup>
+                  <div className="p-2 text-xs space-y-1 min-w-[200px]">
+                    <div className="font-bold text-rose-800">
+                      {i.kind === 'ACCIDENT' ? 'Accident' : 'Breakdown'} • {i.truck_id}
+                    </div>
+                    <div className="text-slate-900">Driver: {i.driver_name ?? i.driver_id}</div>
+                    <div className="text-slate-600">Reported {new Date(i.ts).toLocaleString('en-IN')}</div>
+                    <div className="font-mono text-slate-600">
+                      {(i.lat as number).toFixed(5)}, {(i.lng as number).toFixed(5)}
+                      {i.accuracy_m != null ? ` (±${Math.round(i.accuracy_m)} m)` : ''}
+                    </div>
+                    {i.destination_code && <div className="text-slate-600">Heading to {i.destination_code}</div>}
+                    {canClear(i) && (
+                      <button
+                        onClick={() => handleClear(i.incident_id)}
+                        className="mt-1 w-full px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                      >
+                        Mark cleared
+                      </button>
+                    )}
                   </div>
-                  <div className="text-slate-900">Driver: {i.driver_name ?? i.driver_id}</div>
-                  <div className="text-slate-600">Reported {new Date(i.ts).toLocaleString('en-IN')}</div>
-                  <div className="font-mono text-slate-600">
-                    {(i.lat as number).toFixed(5)}, {(i.lng as number).toFixed(5)}
-                    {i.accuracy_m != null ? ` (±${Math.round(i.accuracy_m)} m)` : ''}
-                  </div>
-                  {i.destination_code && <div className="text-slate-600">Heading to {i.destination_code}</div>}
-                  {canClear(i) && (
-                    <button
-                      onClick={() => handleClear(i.incident_id)}
-                      className="mt-1 w-full px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                    >
-                      Mark cleared
-                    </button>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
+                </Popup>
+              </Marker>
+            </span>
           ))}
         </MapContainer>
 

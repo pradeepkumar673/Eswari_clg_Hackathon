@@ -322,7 +322,6 @@ trackingRouter.post(
         return;
       }
 
-      // Idempotency: a repeated tap returns the original incident
       const existing = await DriverIncident.findOne({ driver_id: driverId, idempotency_key });
       if (existing) {
         const existingProp = await RerouteProposal.findOne({ reason: { $regex: idempotency_key } });
@@ -330,12 +329,21 @@ trackingRouter.post(
         return;
       }
 
-      // 1. Record the live GPS fix sent with the report, so the position is the moment of the press
-      if (gps && Number.isFinite(gps.lat) && Number.isFinite(gps.lng)) {
-        const last: any = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+      // 1. The position of the report: the GPS fix sent with it (the moment of the press).
+      //    Falls back to the latest stored ping only if no fix came with the report.
+      const hasGps = gps && Number.isFinite(gps.lat) && Number.isFinite(gps.lng);
+      const latestStored: any = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+      const reportPos = hasGps
+        ? { lat: gps.lat as number, lng: gps.lng as number, accuracy_m: gps.accuracy_m ?? null, ts: gps.ts ?? new Date(), seq: latestStored?.seq ?? 0, lane_id: null, km_on_lane: null }
+        : latestStored
+          ? { lat: latestStored.lat, lng: latestStored.lng, accuracy_m: latestStored.accuracy_m ?? null, ts: latestStored.ts, seq: latestStored.seq, lane_id: latestStored.lane_id ?? null, km_on_lane: latestStored.km_on_lane ?? null }
+          : null;
+
+      // Also record the fix as a ping for the trail (it may be rejected for low accuracy, which is fine)
+      if (hasGps) {
         await intakeDriverPings(driverId, truckId, [
           {
-            seq: (last?.seq ?? 0) + 1,
+            seq: (latestStored?.seq ?? 0) + 1,
             ts: gps.ts ?? new Date(),
             lat: gps.lat,
             lng: gps.lng,
@@ -345,9 +353,8 @@ trackingRouter.post(
           } as any,
         ]);
       }
-      const fresh: any = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
 
-      // 2. Destination for context on the map and in the notification
+      // 2. Destination for the map and the notification
       const shipment: any = await Shipment.findOne({ code: truckId }).lean();
       const dest: any = shipment ? await Warehouse.findById(shipment.warehouse_id).lean() : null;
 
@@ -360,9 +367,9 @@ trackingRouter.post(
         kind,
         ts: ts ? new Date(ts) : new Date(),
         status: 'REPORTED',
-        lat: fresh?.lat ?? null,
-        lng: fresh?.lng ?? null,
-        accuracy_m: fresh?.accuracy_m ?? null,
+        lat: reportPos?.lat ?? null,
+        lng: reportPos?.lng ?? null,
+        accuracy_m: reportPos?.accuracy_m ?? null,
         warehouse_id: shipment ? String(shipment.warehouse_id) : null,
         destination_code: dest?.code ?? null,
         proposal_id: null,
@@ -370,14 +377,14 @@ trackingRouter.post(
         created_at: new Date(),
       });
 
-      // 3. Reroute proposal and assist matching for breakdowns and accidents
+      // 3. Reroute and assist only when we know where the truck is
       let proposal: any = null;
-      if (kind === 'BREAKDOWN' || kind === 'ACCIDENT') {
+      if ((kind === 'BREAKDOWN' || kind === 'ACCIDENT') && reportPos) {
         const nearest = await findNearestWarehouse({
-          lane_id: fresh?.lane_id,
-          km_on_lane: fresh?.km_on_lane,
-          lat: fresh?.lat ?? 12.7409,
-          lng: fresh?.lng ?? 77.8253,
+          lane_id: reportPos.lane_id,
+          km_on_lane: reportPos.km_on_lane,
+          lat: reportPos.lat,
+          lng: reportPos.lng,
         });
 
         const proposalId = `PROP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -385,11 +392,11 @@ trackingRouter.post(
           proposal_id: proposalId,
           truck_id: truckId,
           from_position: {
-            seq: fresh?.seq ?? 0,
-            lat: fresh?.lat ?? 12.7409,
-            lng: fresh?.lng ?? 77.8253,
-            lane_id: fresh?.lane_id ?? null,
-            km_on_lane: fresh?.km_on_lane ?? null,
+            seq: reportPos.seq,
+            lat: reportPos.lat,
+            lng: reportPos.lng,
+            lane_id: reportPos.lane_id,
+            km_on_lane: reportPos.km_on_lane,
           },
           nearest_warehouse_id: nearest.nearest_warehouse_code,
           road_km: nearest.road_km,
@@ -411,15 +418,13 @@ trackingRouter.post(
           road_km: nearest.road_km,
         });
 
-        if (fresh) {
-          await matchAssistResponders(
-            { incident_id: incidentId, kind, truck_id: truckId, driver_id: driverId, driver_name: driverName },
-            { lat: fresh.lat, lng: fresh.lng, ts: fresh.ts },
-          );
-        }
+        await matchAssistResponders(
+          { incident_id: incidentId, kind, truck_id: truckId, driver_id: driverId, driver_name: driverName },
+          { lat: reportPos.lat, lng: reportPos.lng, ts: new Date(reportPos.ts) },
+        );
       }
 
-      // 4. Live map for everyone, and the bell for managers and admins
+      // 4. Map for everyone, and the bell for managers and admins
       await announceIncident(
         toIncidentView({ ...incident.toObject(), proposal_id: proposal?.proposal_id ?? null }),
       );
