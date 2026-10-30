@@ -86,6 +86,95 @@ claimsRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// POST /claims/:id/decide — Procurement Approver decides (ACCEPT, PARTIAL, REJECT)
+// ---------------------------------------------------------------------------
+claimsRouter.post(
+  '/:id/decide',
+  authenticateToken,
+  requirePermission('claim.decide'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = req.user!;
+      const claimId = req.params.id;
+      const { decision, notes } = req.body || {};
+
+      if (!decision || !['ACCEPT', 'PARTIAL', 'REJECT'].includes(decision)) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Decision must be ACCEPT, PARTIAL, or REJECT',
+        });
+        return;
+      }
+
+      if (!notes || typeof notes !== 'string' || notes.trim().length === 0) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Mandatory decision note is required',
+        });
+        return;
+      }
+
+      const claim = await SupplierClaim.findOne({
+        $or: [{ claim_id: claimId }, { _id: claimId.match(/^[0-9a-fA-F]{24}$/) ? claimId : null }],
+      });
+
+      if (!claim) {
+        res.status(404).json({ error: 'Not Found', message: `Claim ${claimId} not found` });
+        return;
+      }
+
+      const currentUserId = user._id?.toString();
+      const currentUsername = user.username;
+
+      // Separation of duties check:
+      if (claim.linked_by && (claim.linked_by === currentUserId || claim.linked_by === currentUsername)) {
+        res.status(403).json({
+          error: 'Forbidden',
+          code: 'SEPARATION_OF_DUTIES_VIOLATION',
+          message: 'Cannot approve a claim you created.',
+        });
+        return;
+      }
+
+      if (claim.cctv_event_id) {
+        const cctvEvt = await CctvEvent.findOne({ event_id: claim.cctv_event_id }).lean();
+        if (
+          cctvEvt &&
+          cctvEvt.linked_by &&
+          (cctvEvt.linked_by === currentUserId || cctvEvt.linked_by === currentUsername)
+        ) {
+          res.status(403).json({
+            error: 'Forbidden',
+            code: 'SEPARATION_OF_DUTIES_VIOLATION',
+            message: 'Cannot approve a claim you created.',
+          });
+          return;
+        }
+      }
+
+      if (decision === 'ACCEPT') {
+        claim.status = 'ACCEPTED';
+        claim.rejection_reason = null;
+      } else if (decision === 'PARTIAL') {
+        claim.status = 'ACCEPTED';
+        claim.rejection_reason = `PARTIAL: ${notes.trim()}`;
+      } else {
+        claim.status = 'REJECTED';
+        claim.rejection_reason = notes.trim();
+      }
+
+      claim.decided_by = user.username || user._id.toString();
+      claim.version += 1;
+      await claim.save();
+
+      res.json(claim);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // POST /claims/:id/accept — Procurement Approver accepts claim (Separation of duties enforced)
 // ---------------------------------------------------------------------------
 claimsRouter.post(

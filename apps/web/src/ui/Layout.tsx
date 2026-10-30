@@ -46,19 +46,23 @@ import {
   AlertCircle,
   Navigation,
   Truck,
+  Warehouse,
+  Camera,
 } from 'lucide-react';
 
 const SCREENS = [
   { path: '/login', name: '1. Sign-in', icon: Lock, allowedRoles: ['*'] },
-  { path: '/', name: '2. Operations cockpit', icon: LayoutDashboard, allowedRoles: ['*'] },
-  { path: '/intake', name: '3. Intake and quarantine', icon: UploadCloud, allowedRoles: ['Analyst', 'Administrator'] },
-  { path: '/investigation', name: '4. Disruption investigation', icon: Search, allowedRoles: ['*'] },
-  { path: '/impact', name: '5. Impact and risk', icon: Zap, allowedRoles: ['Analyst', 'Manager', 'Administrator'] },
-  { path: '/recovery', name: '6. Recovery workbench', icon: CheckCircle, allowedRoles: ['Analyst', 'Manager'] },
-  { path: '/approvals', name: '7. Approvals and execution', icon: FileCheck, allowedRoles: ['Manager', 'Procurement_Approver'] },
-  { path: '/audit', name: '8. Audit and security', icon: ShieldCheck, allowedRoles: ['Administrator', 'Manager', 'Analyst', 'Procurement_Approver'] },
+  { path: '/', name: '2. Operations Cockpit', icon: LayoutDashboard, allowedRoles: ['*'] },
+  { path: '/intake', name: '3. Intake & Quarantine', icon: UploadCloud, allowedRoles: ['Analyst', 'Administrator'] },
+  { path: '/investigation', name: '4. Disruption Investigation', icon: Search, allowedRoles: ['*'] },
+  { path: '/impact', name: '5. Impact & Risk', icon: Zap, allowedRoles: ['Analyst', 'Manager', 'Administrator'] },
+  { path: '/recovery', name: '6. Recovery Workbench', icon: CheckCircle, allowedRoles: ['Analyst', 'Manager'] },
+  { path: '/approvals', name: '7. Approvals & Execution', icon: FileCheck, allowedRoles: ['Manager', 'Procurement_Approver'] },
+  { path: '/audit', name: '8. Audit & Security', icon: ShieldCheck, allowedRoles: ['Administrator', 'Manager', 'Analyst', 'Procurement_Approver'] },
   { path: '/tracking', name: '9. Live Driver Map', icon: Navigation, allowedRoles: ['*'] },
   { path: '/driver', name: '10. Driver Portal', icon: Truck, allowedRoles: ['DRIVER', 'Administrator', 'Manager'] },
+  { path: '/capacity', name: '11. Capacity Mapper', icon: Warehouse, allowedRoles: ['Warehouse_Operator', 'Manager', 'Administrator', 'Analyst'] },
+  { path: '/claims', name: '12. Evidence & Claims', icon: Camera, allowedRoles: ['Procurement_Approver', 'SUPPLIER', 'Administrator', 'Manager', 'Analyst'] },
 ];
 
 const DEMO_ROLES = [

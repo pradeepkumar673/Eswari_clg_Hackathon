@@ -38,12 +38,13 @@ export interface ClientConnection {
 let wss: WebSocketServer | null = null;
 const clients = new Map<WebSocket, ClientConnection>();
 
-export type SubscriptionTopic = 'tracking' | 'cctv' | 'zones' | 'presence' | 'alerts';
+export type SubscriptionTopic = 'tracking' | 'cctv' | 'zones' | 'capacity' | 'presence' | 'alerts';
 
 const TOPIC_PERMISSIONS: Record<SubscriptionTopic, Capability[]> = {
   tracking: ['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own'],
   cctv: ['cctv.view'],
   zones: ['capacity.view'],
+  capacity: ['capacity.view'],
   presence: ['presence.read'],
   alerts: ['view_cockpit'],
 };
@@ -293,7 +294,7 @@ export async function broadcastToTopic(
         // Analysts, Managers, Admins get unfiltered network tracking
         filteredPayload = payload;
       }
-    } else if (topic === 'cctv' || topic === 'zones') {
+    } else if (topic === 'cctv' || topic === 'zones' || topic === 'capacity') {
       if (client.role === 'Warehouse_Operator' && client.warehouse_id) {
         const userWhDoc = await Warehouse.findById(client.warehouse_id).lean();
         const matchesWh = (item: any) =>

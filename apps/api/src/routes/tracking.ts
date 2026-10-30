@@ -6,7 +6,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { authenticateToken, requirePermission } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { DriverPing } from '../models/driver-pings.js';
 import { DriverIncident } from '../models/driver-incidents.js';
 import { RerouteProposal } from '../models/reroute-proposals.js';
@@ -26,6 +26,76 @@ import {
 import { config } from '../config.js';
 
 export const trackingRouter = Router();
+
+// ── GET /tracking/positions ───────────────────────────────────────────────
+trackingRouter.get(
+  '/tracking/positions',
+  authenticateToken,
+  requireAnyPermission(['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own']),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = req.user!;
+      const filter: Record<string, any> = {};
+
+      if (user.role.toUpperCase() === 'DRIVER') {
+        if (!user.driver_id && !user.truck_id) {
+          res.status(403).json({ error: 'Forbidden', message: 'Driver has no bound truck' });
+          return;
+        }
+        filter.driver_id = user.driver_id;
+      } else if (user.role === 'Warehouse_Operator') {
+        const queryWh = req.query.warehouse_id as string | undefined;
+        if (queryWh && user.warehouse_id) {
+          const userWhDoc = await Warehouse.findById(user.warehouse_id).lean();
+          const matches =
+            user.warehouse_id.toString() === queryWh ||
+            (userWhDoc && userWhDoc.code === queryWh);
+          if (!matches) {
+            res.status(403).json({ error: 'Forbidden', message: 'Operator restricted to assigned warehouse' });
+            return;
+          }
+        }
+      }
+
+      if (req.query.truck_id) {
+        filter.truck_id = req.query.truck_id;
+      }
+      if (req.query.driver_id) {
+        filter.driver_id = req.query.driver_id;
+      }
+
+      const pings = await DriverPing.find(filter).sort({ seq: -1 }).limit(100).lean();
+      res.json(pings);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ── GET /tracking/drivers/:driver_id/positions ─────────────────────────────
+trackingRouter.get(
+  '/tracking/drivers/:driver_id/positions',
+  authenticateToken,
+  requireAnyPermission(['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own']),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = req.user!;
+      const targetDriverId = req.params.driver_id;
+
+      if (user.role.toUpperCase() === 'DRIVER') {
+        if (user.driver_id !== targetDriverId) {
+          res.status(403).json({ error: 'Forbidden', message: 'Driver can only read own positions' });
+          return;
+        }
+      }
+
+      const pings = await DriverPing.find({ driver_id: targetDriverId }).sort({ seq: -1 }).limit(100).lean();
+      res.json(pings);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
 
 // ── 1. GET /tracking/trucks ──────────────────────────────────────────────────
 trackingRouter.get(

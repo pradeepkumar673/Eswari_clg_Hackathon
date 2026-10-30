@@ -22,6 +22,9 @@ import { ApprovalsScreen } from './screens/ApprovalsScreen.js';
 import { AuditScreen } from './screens/AuditScreen.js';
 import { TrackingScreen } from './screens/TrackingScreen.js';
 import { DriverScreen } from './screens/DriverScreen.js';
+import { WarehouseLayoutScreen } from './screens/WarehouseLayoutScreen.js';
+import { ClaimsScreen } from './screens/ClaimsScreen.js';
+import { RoleHomeScreen } from './screens/RoleHomeScreen.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +70,8 @@ export function App() {
         <Layout user={user} onUserChange={refreshUser}>
           <Routes>
             <Route path="/login" element={<SignInScreen onLoginSuccess={refreshUser} />} />
-            <Route path="/" element={<CockpitScreen />} />
+            <Route path="/" element={<RoleHomeScreen />} />
+            <Route path="/cockpit" element={<CockpitScreen />} />
             <Route path="/intake" element={<IntakeScreen />} />
             <Route path="/investigation" element={<InvestigationScreen />} />
             <Route path="/impact" element={<ImpactScreen />} />
@@ -76,6 +80,8 @@ export function App() {
             <Route path="/audit" element={<AuditScreen />} />
             <Route path="/tracking" element={<TrackingScreen />} />
             <Route path="/driver" element={<DriverScreen />} />
+            <Route path="/capacity" element={<WarehouseLayoutScreen />} />
+            <Route path="/claims" element={<ClaimsScreen />} />
             {/* Catch-all redirect to Cockpit */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

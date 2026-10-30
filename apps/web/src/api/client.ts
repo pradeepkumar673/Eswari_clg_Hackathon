@@ -332,4 +332,55 @@ export const api = {
       }),
     getScorecards: () => apiRequest<any[]>('/suppliers/scorecards'),
   },
+
+  // Capacity Mapper & Inbound Plans
+  capacity: {
+    getZones: (warehouseId = 'WH-HOS') => apiRequest<any[]>(`/zones?warehouse_id=${warehouseId}`),
+    getZone: (zoneId: string) => apiRequest<any>(`/zones/${zoneId}`),
+    createZone: (data: any) => apiRequest<any>('/zones', { method: 'POST', body: JSON.stringify(data) }),
+    patchZone: (zoneId: string, data: any) => apiRequest<any>(`/zones/${zoneId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteZone: (zoneId: string) => apiRequest<any>(`/zones/${zoneId}`, { method: 'DELETE' }),
+    assignStock: (zoneId: string, skuId: string, units: number) =>
+      apiRequest<any>(`/zones/${zoneId}/assignments`, { method: 'POST', body: JSON.stringify({ sku_id: skuId, units }) }),
+    checkCapacity: (zoneId: string, shipmentId?: string, slots?: number) =>
+      apiRequest<any>('/capacity/check', { method: 'POST', body: JSON.stringify({ zone_id: zoneId, shipment_id: shipmentId, slots }) }),
+    createInboundPlan: (shipmentId: string, zoneId: string, slots?: number, planOverCapacity?: boolean) =>
+      apiRequest<any>('/capacity/inbound-plans', {
+        method: 'POST',
+        body: JSON.stringify({ shipment_id: shipmentId, zone_id: zoneId, slots, plan_over_capacity: planOverCapacity }),
+      }),
+    deleteInboundPlan: (planId: string) => apiRequest<any>(`/capacity/inbound-plans/${planId}`, { method: 'DELETE' }),
+    getOverview: (warehouseId = 'WH-HOS') => apiRequest<any>(`/capacity/overview?warehouse_id=${warehouseId}`),
+  },
+
+  // Supplier Claims
+  claims: {
+    getClaims: (supplierId?: string) => apiRequest<any[]>(`/claims${supplierId ? `?supplier_id=${supplierId}` : ''}`),
+    getClaim: (id: string) => apiRequest<any>(`/claims/${id}`),
+    respond: (id: string, response: string) => apiRequest<any>(`/claims/${id}/respond`, { method: 'POST', body: JSON.stringify({ response }) }),
+    decide: (id: string, decision: 'ACCEPT' | 'PARTIAL' | 'REJECT', notes: string) =>
+      apiRequest<any>(`/claims/${id}/decide`, { method: 'POST', body: JSON.stringify({ decision, notes }) }),
+  },
+
+  // CCTV Vision & Evidence
+  cctv: {
+    getClips: (warehouseId?: string) => apiRequest<any[]>(`/cctv/clips${warehouseId ? `?warehouse_id=${warehouseId}` : ''}`),
+    getEvents: (warehouseId?: string) => apiRequest<any[]>(`/cctv/events${warehouseId ? `?warehouse_id=${warehouseId}` : ''}`),
+    getHotspots: (warehouseId?: string) => apiRequest<any[]>(`/cctv/hotspots${warehouseId ? `?warehouse_id=${warehouseId}` : ''}`),
+    linkEvent: (eventId: string, shipmentId?: string) =>
+      apiRequest<any>(`/cctv/events/${eventId}/link`, { method: 'POST', body: JSON.stringify({ shipment_id: shipmentId }) }),
+    verifyEvidence: (evidenceId: string) => apiRequest<any>(`/evidence/${evidenceId}/verify`),
+    tamperEvidence: (evidenceId: string) => apiRequest<any>(`/evidence/${evidenceId}/tamper`, { method: 'POST' }),
+  },
+
+  // Live Driver Tracking & Reroutes
+  tracking: {
+    getTrucks: () => apiRequest<any[]>('/tracking/trucks'),
+    getPositions: () => apiRequest<any[]>('/tracking/positions'),
+    getReroutes: (status?: string) => apiRequest<any[]>(`/tracking/reroutes${status ? `?status=${status}` : ''}`),
+    approveReroute: (id: string, notes?: string) =>
+      apiRequest<any>(`/tracking/reroutes/${id}/approve`, { method: 'POST', body: JSON.stringify({ notes }) }),
+    rejectReroute: (id: string, notes?: string) =>
+      apiRequest<any>(`/tracking/reroutes/${id}/reject`, { method: 'POST', body: JSON.stringify({ notes }) }),
+  },
 };

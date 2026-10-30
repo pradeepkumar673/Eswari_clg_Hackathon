@@ -219,6 +219,9 @@ app.use('/cctv', cctvRouter);
 app.use('/api/v1/zones', zonesRouter);
 app.use('/zones', zonesRouter);
 
+app.use('/api/v1/capacity', zonesRouter);
+app.use('/capacity', zonesRouter);
+
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();
 for (const cap of Object.keys(ROLE_PERMISSIONS) as Capability[]) {

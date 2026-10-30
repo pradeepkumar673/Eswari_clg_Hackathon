@@ -265,9 +265,9 @@ export const ROLE_PERMISSIONS: Record<Capability, PermissionDefinition> = {
     description: 'View warehouse zone polygons, slot capacity and current occupancy',
   },
   'zone.edit': {
-    roles: ['Warehouse_Operator', 'Administrator'],
+    roles: ['Manager', 'Administrator'],
     warehouseScoped: true,
-    description: 'Create, modify and re-polygon warehouse operational zones',
+    description: 'Create, modify and re-polygon warehouse operational zones (Manager and Admin only)',
   },
   'presence.read': {
     roles: ['Analyst', 'Manager', 'Warehouse_Operator', 'Administrator'],

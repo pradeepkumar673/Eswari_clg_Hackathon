@@ -9,6 +9,8 @@ export interface IZone extends Document {
   capacity_slots: number;
   reserved_inbound_slots: number;
   version: number;
+  is_active: boolean;
+  deleted_at: Date | null;
   created_at: Date;
 }
 
@@ -30,6 +32,7 @@ const zoneSchema = new Schema<IZone>({
     min: 0,
     validate: {
       validator: function (this: IZone, val: number) {
+        if ((this as any).allow_over_capacity) return true;
         if (this.capacity_slots !== undefined && this.capacity_slots !== null) {
           return val <= this.capacity_slots;
         }
@@ -39,6 +42,8 @@ const zoneSchema = new Schema<IZone>({
     },
   },
   version: { type: Number, default: 1, min: 1 },
+  is_active: { type: Boolean, default: true },
+  deleted_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },
 }, { collection: 'zones' });
 
