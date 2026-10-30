@@ -78,6 +78,7 @@ async function initiateReplicaSet() {
     try {
       const status = await admin.command({ replSetGetStatus: 1 });
       console.log(`Replica set "${status.set}" is active (state ${status.myState}).`);
+      return true;
     } catch (err) {
       if (err.message && (err.message.includes('no replset config') || err.message.includes('NotYetInitialized'))) {
         console.log(`Initiating replica set "${REPL_SET}"...`);
@@ -93,17 +94,29 @@ async function initiateReplicaSet() {
           const s = await admin.command({ hello: 1 });
           if (s.isWritablePrimary) {
             console.log('Node is now PRIMARY.');
-            break;
+            return true;
           }
         }
+      } else if (err.message && err.message.includes('not running with --replSet')) {
+        console.error(`\n❌ CONFLICT DETECTED: MongoDB is running on port ${PORT}, but as a STANDALONE server without '--replSet ${REPL_SET}'.`);
+        console.error(`The Windows service 'MongoDB Server (MongoDB)' is holding port ${PORT}.`);
+        console.error(`\nTo resolve this:`);
+        console.error(`  1. Open PowerShell as Administrator and run:`);
+        console.error(`     Stop-Service MongoDB`);
+        console.error(`     Set-Service MongoDB -StartupType Manual`);
+        console.error(`     (Or open 'services.msc' -> stop 'MongoDB Server (MongoDB)')`);
+        console.error(`  2. Then run: npm run db:start\n`);
+        throw new Error(`Port ${PORT} is occupied by standalone MongoDB without --replSet ${REPL_SET}`);
       } else {
         console.log('ReplSet status:', err.message);
+        throw err;
       }
     } finally {
       await client.close();
     }
   } catch (err) {
-    console.log('Replica set initialization notice:', err.message);
+    console.error('Replica set initialization failed:', err.message);
+    throw err;
   }
 }
 
