@@ -38,7 +38,7 @@ export interface ClientConnection {
 let wss: WebSocketServer | null = null;
 const clients = new Map<WebSocket, ClientConnection>();
 
-export type SubscriptionTopic = 'tracking' | 'cctv' | 'zones' | 'capacity' | 'presence' | 'alerts' | 'driver' | 'shipments';
+export type SubscriptionTopic = 'tracking' | 'cctv' | 'zones' | 'capacity' | 'presence' | 'alerts' | 'driver' | 'shipments' | 'warehouses';
 
 const TOPIC_PERMISSIONS: Record<SubscriptionTopic, Capability[]> = {
   tracking: ['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own'],
@@ -49,6 +49,7 @@ const TOPIC_PERMISSIONS: Record<SubscriptionTopic, Capability[]> = {
   alerts: ['view_cockpit'],
   driver: ['driver.ping'],
   shipments: ['view_cockpit'],
+  warehouses: ['warehouse.read'],
 };
 
 /**

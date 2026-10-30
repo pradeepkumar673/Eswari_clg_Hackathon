@@ -47,7 +47,7 @@ export function haversineDistanceKm(
 export async function findNearestWarehouse(
   params: FindNearestWarehouseParams,
 ): Promise<NearestWarehouseResult> {
-  const warehouses = await Warehouse.find({}).lean();
+  const warehouses = await Warehouse.find({ is_active: { $ne: false }, lat: { $ne: null }, lng: { $ne: null } }).lean();
   if (warehouses.length === 0) {
     throw new Error('No warehouses configured in system');
   }

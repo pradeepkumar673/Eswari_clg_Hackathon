@@ -25,6 +25,7 @@ import {
   Radio,
 } from 'lucide-react';
 import { getStoredToken } from '../api/client.js';
+import { useWarehouses } from '../hooks/useWarehouses.js';
 
 const MAP_TILE_URL =
   (import.meta as any).env?.VITE_MAP_TILE_URL ||
@@ -110,6 +111,7 @@ const createNodeIcon = (label: string, isWh: boolean) => {
 };
 
 export function TrackingScreen() {
+  const { warehouses } = useWarehouses();
   const [trucks, setTrucks] = useState<Map<string, TruckTelemetry>>(new Map());
   const [selectedTruck, setSelectedTruck] = useState<TruckTelemetry | null>(null);
   const [lanes, setLanes] = useState<any[]>([]);
@@ -141,31 +143,28 @@ export function TrackingScreen() {
         }
       })
       .catch(() => {});
+  }, []);
 
-    // Load route nodes & lanes
-    fetch('/api/v1/warehouses', { headers })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((whs) => {
-        fetch('/api/v1/suppliers', { headers })
-          .then((res) => (res.ok ? res.json() : []))
-          .then((sups) => {
-            const allNodes = [
-              ...(whs || []).map((w: any) => ({ ...w, isWh: true })),
-              ...(sups || []).map((s: any) => ({ ...s, isWh: false })),
-            ];
-            setNodes(allNodes);
+  // Load route nodes & lanes
+  useEffect(() => {
+    const token = getStoredToken();
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-            // Fetch transfer lanes
-            fetch('/api/v1/transfer-lanes', { headers })
-              .then((res) => (res.ok ? res.json() : []))
-              .then((laneData) => {
-                setLanes(laneData || []);
-              })
-              .catch(() => {});
-          });
+    fetch('/api/v1/suppliers', { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((sups) => {
+        setNodes([
+          ...warehouses.map((w: any) => ({ ...w, isWh: true })),
+          ...(sups || []).map((s: any) => ({ ...s, isWh: false })),
+        ]);
       })
       .catch(() => {});
-  }, []);
+
+    fetch('/api/v1/transfer-lanes', { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((laneData) => setLanes(laneData || []))
+      .catch(() => {});
+  }, [warehouses]);
 
   // WebSocket live feed connection with exponential backoff (1, 2, 4, ... 30s)
   useEffect(() => {

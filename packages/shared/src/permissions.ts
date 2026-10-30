@@ -71,7 +71,8 @@ export type Capability =
   | 'claim.decide'
   | 'capacity.view'
   | 'zone.edit'
-  | 'presence.read';
+  | 'presence.read'
+  | 'warehouse.read';
 
 export interface PermissionDefinition {
   roles: Role[];
@@ -272,6 +273,10 @@ export const ROLE_PERMISSIONS: Record<Capability, PermissionDefinition> = {
   'presence.read': {
     roles: ['Analyst', 'Manager', 'Warehouse_Operator', 'Administrator'],
     description: 'View live user presence across control tower desks and zones',
+  },
+  'warehouse.read': {
+    roles: ALL_ROLES,
+    description: 'Read the warehouse master list (codes, names, positions)',
   },
 };
 

@@ -27,6 +27,9 @@ import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import { api, getStoredUser, getStoredToken } from '../api/client.js';
 import { resolveWarehouseCode } from '../utils/normalize.js';
 import { WarehouseSiteMap } from '../ui/WarehouseSiteMap.js';
+import { useWarehouses } from '../hooks/useWarehouses.js';
+import { WarehouseSelector } from '../ui/WarehouseSelector.js';
+import { NewWarehouseDialog } from '../ui/NewWarehouseDialog.js';
 import {
   Button,
   Drawer,
@@ -113,6 +116,8 @@ function ZoneDrawControls({ onCreated }: { onCreated: (pts: [number, number][]) 
 export function WarehouseLayoutScreen() {
   const currentUser = getStoredUser();
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Administrator';
+  const { warehouses, refresh: refreshWarehouses } = useWarehouses();
+  const [showNewWarehouse, setShowNewWarehouse] = useState(false);
 
   const [warehouseId, setWarehouseId] = useState<string>(resolveWarehouseCode(currentUser));
   const [zones, setZones] = useState<ZoneData[]>([]);
@@ -462,19 +467,13 @@ export function WarehouseLayoutScreen() {
           {/* Warehouse Selector */}
           <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
             <span className="text-xs font-semibold text-slate-600 px-2">Warehouse:</span>
-            {['WH-HOS', 'WH-CHN', 'WH-BLR'].map((wh) => (
-              <button
-                key={wh}
-                onClick={() => setWarehouseId(wh)}
-                className={`text-xs px-2.5 py-1 rounded font-medium transition-all ${
-                  warehouseId === wh
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-                }`}
-              >
-                {wh}
-              </button>
-            ))}
+            <WarehouseSelector
+              warehouses={warehouses.filter((w) => w.is_active)}
+              value={warehouseId}
+              onChange={setWarehouseId}
+              onCreateNew={() => setShowNewWarehouse(true)}
+              canCreate={isManagerOrAdmin}
+            />
           </div>
 
           {/* Map vs List View Toggle */}
@@ -1154,6 +1153,17 @@ export function WarehouseLayoutScreen() {
             </div>
           </div>
         </div>
+      )}
+
+      {showNewWarehouse && (
+        <NewWarehouseDialog
+          onClose={() => setShowNewWarehouse(false)}
+          onCreated={(code) => {
+            setShowNewWarehouse(false);
+            refreshWarehouses();
+            setWarehouseId(code);
+          }}
+        />
       )}
     </div>
   );

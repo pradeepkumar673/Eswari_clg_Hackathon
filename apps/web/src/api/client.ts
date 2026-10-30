@@ -271,10 +271,24 @@ export const api = {
   },
 
   // Master Data & Network
+  warehouses: {
+    list: () => apiRequest<any[]>('/warehouses'),
+    create: (body: {
+      code: string;
+      name: string;
+      lat: number;
+      lng: number;
+      processing_hours?: number;
+      is_hub?: boolean;
+    }) => apiRequest<any>('/warehouses', { method: 'POST', body: JSON.stringify(body) }),
+    update: (code: string, body: Record<string, unknown>) =>
+      apiRequest<any>(`/warehouses/${code}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  },
+
   network: {
     getNodes: async () => {
       const [whs, sups, lanes] = await Promise.all([
-        apiRequest<any[]>('/admin/master/warehouses').catch(() => []),
+        apiRequest<any[]>('/warehouses').catch(() => []),
         apiRequest<any[]>('/admin/master/suppliers').catch(() => []),
         apiRequest<any[]>('/admin/master/lanes').catch(() => []),
       ]);

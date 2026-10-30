@@ -100,9 +100,21 @@ zonesRouter.put(
         return;
       }
 
+      const centroid = {
+        lat: polygon.reduce((s: number, p: number[]) => s + p[0], 0) / polygon.length,
+        lng: polygon.reduce((s: number, p: number[]) => s + p[1], 0) / polygon.length,
+      };
+
       await Warehouse.updateOne(
         { code },
-        { $set: { footprint: polygon, footprint_updated_at: new Date() } },
+        {
+          $set: {
+            footprint: polygon,
+            footprint_updated_at: new Date(),
+            lat: centroid.lat,
+            lng: centroid.lng,
+          },
+        },
       );
 
       try {

@@ -47,7 +47,7 @@ driverRealtimeRouter.get(
       }
 
       const shipment: any = await Shipment.findOne({ code: truckId }).lean();
-      const warehouses: any[] = await Warehouse.find({}).lean();
+      const warehouses: any[] = await Warehouse.find({ is_active: { $ne: false } }).lean();
 
       const options = await Promise.all(
         warehouses

@@ -256,8 +256,16 @@ export function DriverScreen() {
         } catch {
           return;
         }
-        if (msg.type === 'auth_ok') ws?.send(JSON.stringify({ type: 'subscribe', topic: 'driver' }));
-        if (msg.type !== 'event' || msg.topic !== 'driver' || !msg.data) return;
+        if (msg.type === 'auth_ok') {
+          ws?.send(JSON.stringify({ type: 'subscribe', topic: 'driver' }));
+          ws?.send(JSON.stringify({ type: 'subscribe', topic: 'warehouses' }));
+        }
+        if (msg.type !== 'event' || !msg.data) return;
+        if (msg.topic === 'warehouses') {
+          loadOptions();
+          return;
+        }
+        if (msg.topic !== 'driver') return;
 
         const d = msg.data;
         if (d.type === 'ASSIST_REQUEST' && d.assist) {
