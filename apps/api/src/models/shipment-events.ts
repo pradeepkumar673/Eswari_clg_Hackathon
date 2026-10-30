@@ -11,6 +11,10 @@ export interface IShipmentEvent extends Document {
   confidence: number;
   raw_payload: Record<string, unknown>;
   ingested_at: Date;
+  // Reconciler fields (Step 5B)
+  event_time: Date | null;
+  reconcile_status: 'APPLIED' | 'DUPLICATE' | 'STALE' | 'CONFLICT' | 'REJECTED' | null;
+  reconcile_reason: string | null;
 }
 
 const ShipmentEventSchema = new Schema<IShipmentEvent>(
@@ -32,7 +36,15 @@ const ShipmentEventSchema = new Schema<IShipmentEvent>(
     event_type: {
       type: String,
       required: true,
-      enum: ['DELAY', 'ETA_UPDATE', 'DAMAGE', 'PARTIAL_LOSS'],
+      enum: [
+        'DELAY',
+        'ETA_UPDATE',
+        'DAMAGE',
+        'PARTIAL_LOSS',
+        'DAMAGE_REPORT',
+        'DELAY_REPORT',
+        'INVENTORY_CORRECTION',
+      ],
     },
     reported_eta: {
       type: Date,
@@ -55,6 +67,19 @@ const ShipmentEventSchema = new Schema<IShipmentEvent>(
     ingested_at: {
       type: Date,
       required: true,
+    },
+    event_time: {
+      type: Date,
+      default: null,
+    },
+    reconcile_status: {
+      type: String,
+      enum: ['APPLIED', 'DUPLICATE', 'STALE', 'CONFLICT', 'REJECTED', null],
+      default: null,
+    },
+    reconcile_reason: {
+      type: String,
+      default: null,
     },
   },
   { collection: 'shipment_events' }

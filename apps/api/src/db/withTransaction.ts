@@ -34,7 +34,9 @@ export async function withTransaction<T>(
 
         const result = await fn(session);
 
-        await session.commitTransaction();
+        if (session.inTransaction()) {
+          await session.commitTransaction();
+        }
         return result;
       } catch (err: any) {
         lastError = err;

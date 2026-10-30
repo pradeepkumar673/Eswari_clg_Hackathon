@@ -13,7 +13,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 2 | Data model and security roles | **STEP 2: PASS** |
 | 3 | Seed data | **STEP 3: PASS** |
 | 4 | Auth, RBAC, audit hash chain | **STEP 4: PASS** |
-| 5 | Import pipeline and Belief-ETA reconciler | NOT STARTED |
+| 5 | Import pipeline and Belief-ETA reconciler | **STEP 5: PASS** |
 | 6 | Voice and text ingestion, impact engine and risk bands | NOT STARTED |
 | 7 | Solver service and recovery plan generation | NOT STARTED |
 | 8 | Proof checker, Decision Contract and governed approvals | NOT STARTED |
@@ -95,15 +95,33 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
   - 47 automated tests in `apps/api/test/step4-auth-rbac-audit.test.ts`.
   - Monorepo full suite: 97 Vitest tests + 1 Pytest test passing cleanly.
 
+### Step 5 — Import pipeline and Belief-ETA reconciler (PASS)
+- **Part A: Import pipeline (M1, B11)**:
+  - `apps/api/src/services/importParser.ts`: CSV and JSON parsers with SHA-256 file_hash idempotency.
+  - `apps/api/src/services/importValidation.ts`: Zod schema validation per entity, Levenshtein distance code suggestions, natural-key duplicate vs conflict detection.
+  - `apps/api/src/services/importService.ts`: full quarantine lifecycle (create, quarantine, repair/discard, idempotent commit, quality report).
+  - `apps/api/src/services/inventoryCorrection.ts`: audited inventory correction ledger service.
+  - `apps/api/src/services/bus.ts`: synchronous domain bus for internal events (`IMPORT_COMMITTED`, `ETA_CHANGED`, `EVENT_APPLIED`, etc.).
+  - `apps/api/src/routes/imports.ts`: routes for import upload, quarantine inspection, row repair, commit, quality reporting.
+- **Part B: Belief-ETA Reconciler and Carrier Webhook (M2)**:
+  - `apps/api/src/services/reconciler.ts`: decision tree evaluating unknown shipments (REJECTED), same key duplicate catch (DUPLICATE), staleness relative to current basis (STALE), source disagreement exceeding tolerance (CONFLICT with `review_status: UNDER_REVIEW`), and trusted ETA overrides (APPLIED with `resolved_eta` and `eta_basis_event_id`).
+  - `apps/api/src/routes/events.ts`: conflict listing (`GET /events/conflicts`) and resolution (`POST /events/conflicts/:id/resolve`) with full audit and bus emission.
+  - `apps/api/src/routes/webhooks.ts`: carrier webhook wired to reconciler with HMAC-SHA256 verification and backwards-compatible response contract.
+  - `apps/api/src/services/scenarioB.ts`: duplicate storm generator (5x duplicate + stale + conflict).
+- **Tests**:
+  - `apps/api/test/step5-import-pipeline.test.ts`: 3 tests passing.
+  - `apps/api/test/step5-reconciler.test.ts`: 6 tests passing (duplicate storm, stale event, conflict tolerance, concurrency, conflict resolution API, RBAC & bad HMAC).
+  - Monorepo full suite: 106 Vitest tests + 1 Pytest test passing cleanly.
+
 ---
 
 ## NEXT STEP
 
-**Step 5 — Import pipeline and Belief-ETA reconciler**
-- Target Model: OPUS 4.6
+**Step 6 — Voice and text ingestion, impact engine, risk bands (W1, B15, M3, B5)**
+- Target Model: SONNET 4.6
 - Deliverables:
-  - Part A: Import pipeline (M1, B11) with multipart upload, Zod validation, edit-distance suggestions, quarantine handling, natural key deduplication and conflict detection.
-  - Part B: Belief-ETA reconciler and carrier webhook (M2) with multi-source trust tiers, trust-based ETA overrides, and shipment event logging.
+  - Part A: Field reports, voice parse, text ingestion backend (W1, B15) with Groq LLM wrapper, deterministic Tanglish/English rule-based extractor fallback, draft cards, human confirmation flow.
+  - Part B: Impact engine, risk waterfall, risk bands (M3, B5) with disruption tracking, deterministic risk formula, configurable risk policies, evidence drawers, and heat-grid endpoints.
 
 ---
 

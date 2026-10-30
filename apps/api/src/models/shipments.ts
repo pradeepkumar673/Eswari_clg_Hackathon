@@ -13,6 +13,10 @@ export interface IShipment extends Document {
   usable_quantity: number | null;
   is_disrupted: boolean;
   created_at: Date;
+  // Reconciler fields (Step 5B)
+  resolved_eta: Date | null;
+  eta_basis_event_id: mongoose.Types.ObjectId | null;
+  review_status: 'NORMAL' | 'UNDER_REVIEW' | null;
 }
 
 const shipmentSchema = new Schema<IShipment>({
@@ -28,6 +32,13 @@ const shipmentSchema = new Schema<IShipment>({
   usable_quantity: { type: Number, default: null },
   is_disrupted: { type: Boolean, required: true, default: false },
   created_at: { type: Date, default: Date.now },
+  resolved_eta: { type: Date, default: null },
+  eta_basis_event_id: { type: Schema.Types.ObjectId, ref: 'ShipmentEvent', default: null },
+  review_status: {
+    type: String,
+    enum: ['NORMAL', 'UNDER_REVIEW', null],
+    default: null,
+  },
 }, { collection: 'shipments' });
 
 export const Shipment = mongoose.model<IShipment>('Shipment', shipmentSchema);
