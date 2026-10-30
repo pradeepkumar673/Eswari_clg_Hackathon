@@ -267,4 +267,59 @@ export const api = {
       return { warehouses: whs, suppliers: sups, lanes };
     },
   },
+
+  // Approvals & Execution
+  approvals: {
+    getQueue: () => apiRequest<any[]>('/approvals/queue'),
+    approve: (planId: string, role?: string, notes?: string) =>
+      apiRequest<any>(`/plans/${planId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ role, notes }),
+      }),
+    reject: (planId: string, reason: string) =>
+      apiRequest<any>(`/plans/${planId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    requestChanges: (planId: string, notes: string) =>
+      apiRequest<any>(`/plans/${planId}/request-changes`, {
+        method: 'POST',
+        body: JSON.stringify({ notes }),
+      }),
+    execute: (planId: string) =>
+      apiRequest<any>(`/plans/${planId}/execute`, { method: 'POST' }),
+    rollback: (planId: string, reason?: string) =>
+      apiRequest<any>(`/plans/${planId}/rollback`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    getDelegations: () => apiRequest<any[]>('/approvals/delegations'),
+    createDelegation: (data: { delegatee_id: string; role: string; expires_at: string; reason: string }) =>
+      apiRequest<any>('/approvals/delegations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    revokeDelegation: (id: string) =>
+      apiRequest<any>(`/approvals/delegations/${id}`, { method: 'DELETE' }),
+    getNotices: () => apiRequest<any[]>('/customer-notices'),
+    releaseNotice: (id: string) =>
+      apiRequest<any>(`/customer-notices/${id}/release`, { method: 'POST' }),
+  },
+
+  // Audit & Security
+  audit: {
+    getRecords: (limit = 50) => apiRequest<any[]>(`/audit?limit=${limit}`),
+    verifyChain: () => apiRequest<{ ok: boolean; checked: number; error?: string }>('/audit/verify'),
+    tamperChain: () => apiRequest<any>('/admin/demo/tamper', { method: 'POST' }),
+    runRedTeam: () => apiRequest<any>('/admin/red-team/run', { method: 'POST' }),
+    getMasterData: (entity: string) => apiRequest<any[]>(`/admin/master/${entity}`),
+    deactivateMasterData: (entity: string, id: string) =>
+      apiRequest<any>(`/admin/master/${entity}/${id}`, { method: 'DELETE' }),
+    createInventoryCorrection: (data: { warehouse_id: string; sku_id: string; delta: number; reason_code: string; notes?: string }) =>
+      apiRequest<any>('/inventory/corrections', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    getScorecards: () => apiRequest<any[]>('/suppliers/scorecards'),
+  },
 };

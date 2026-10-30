@@ -23,7 +23,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | **STEP 12: PASS (BACKEND COMPLETE)** |
 | 13 | Frontend shell, design system and screens 1 to 4 | **STEP 13: PASS** |
 | 14 | Screens 5 and 6, notification drawer, Ask drawer, network map and add-on panels | **STEP 14: PASS** |
-| 15 | Screens 7 and 8, voice in the browser and operator phone view | NOT STARTED |
+| 15 | Screens 7 and 8, voice in the browser and operator phone view | **STEP 15: PASS** |
 | 16 | Full acceptance suite | NOT STARTED |
 | 17 | Hardening, full-repo review and demo readiness | NOT STARTED |
 | 18 | Final audit | NOT STARTED |
