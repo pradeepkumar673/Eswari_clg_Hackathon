@@ -102,3 +102,4 @@ At every Step Close, perform this review pass manually before committing:
 - In each UI step (22–26), use `generate_screen_from_text` for initial screen scaffolding, then hand-edit with real API data wiring.
 - Use `apply_design_system` to ensure token consistency across screens.
 - **Important:** StitchMCP output is a starting point only — every component must then be wired to real API data. No StitchMCP output ships with mock data.
+

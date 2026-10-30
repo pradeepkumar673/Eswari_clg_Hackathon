@@ -9,7 +9,7 @@ _Last updated: 2026-10-30 by Step 0 (Brain)_
 | Step | Title | Status |
 |------|-------|--------|
 | 0 | Brain | **STEP 0: PASS** |
-| 1 | Scaffold and Mongo replica set | NOT STARTED |
+| 1 | Scaffold and Mongo replica set | **STEP 1: PASS** |
 | 2 | Data model and security roles | NOT STARTED |
 | 3 | Seed data | NOT STARTED |
 | 4 | Auth, RBAC, audit hash chain | NOT STARTED |
@@ -44,7 +44,7 @@ _Last updated: 2026-10-30 by Step 0 (Brain)_
 
 ## IN PROGRESS
 
-**Step 1 — Scaffold and Mongo replica set** (NOT STARTED — begin next)
+**Step 2 — Data model, indexes, validators, security roles** (NOT STARTED — next)
 
 ---
 

@@ -122,7 +122,7 @@ TASK: Scaffold the monorepo so one command starts everything.
 
 Verify by actually running: db:start, dev, then curl the three health endpoints and paste the outputs. Follow the Step Close Routine.
 ```
-
+ 
 ---
 
 ## STEP 2: Data model, indexes, validators, security roles

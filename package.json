@@ -1,0 +1,32 @@
+{
+  "name": "disruptioniq",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"api,web,solver\" -c \"blue,green,magenta\" \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:solver\"",
+    "dev:api": "npm --workspace=apps/api run dev",
+    "dev:web": "npm --workspace=apps/web run dev",
+    "dev:solver": "python -m uvicorn main:app --app-dir services/solver --reload --port 8000",
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run && npm run solver:test",
+    "solver:test": "python -m pytest services/solver/tests",
+    "lint": "eslint .",
+    "typecheck": "tsc -b --noEmit",
+    "db:start": "node scripts/db-start.mjs",
+    "db:seed": "node --loader ts-node/esm scripts/seed.ts",
+    "db:reset": "node --loader ts-node/esm scripts/reset.ts",
+    "scan:placeholders": "node scripts/scan-placeholders.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "eslint": "^9.20.1",
+    "prettier": "^3.5.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
+

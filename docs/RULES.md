@@ -162,3 +162,4 @@ docs/              — All documentation files
 No API route exists without `requirePermission`. At startup the api runs a **self-check** that enumerates all registered routes and fails the boot if any non-public route lacks a permission tag.
 
 Public routes (no auth required): `POST /auth/login`, `GET /api/v1/health`.
+
