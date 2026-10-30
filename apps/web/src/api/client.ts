@@ -172,18 +172,18 @@ export const api = {
 
   // Disruption Investigation
   investigation: {
+    listShipments: () => apiRequest<{ shipments: any[] }>('/investigation/shipments'),
+    getShipment: (id: string) => apiRequest<any>(`/investigation/shipments/${encodeURIComponent(id)}`),
+    getReplay: (id: string) => apiRequest<any>(`/investigation/shipments/${encodeURIComponent(id)}/replay`),
+    resolveConflict: (conflictEventId: string, body: { chosen_event_id: string; reason: string }) =>
+      apiRequest<any>(`/events/conflicts/${conflictEventId}/resolve`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    getScorecard: () => apiRequest<any>('/suppliers/scorecards'),
     getDisruptions: () => apiRequest<any[]>('/disruptions'),
     getDisruption: (id: string) => apiRequest<any>(`/disruptions/${id}`),
     getEvents: (shipmentId: string) => apiRequest<any[]>(`/events?shipment_id=${shipmentId}`),
-    resolveConflict: (eventId: string, resolution: string) =>
-      apiRequest<any>(`/events/${eventId}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ resolution }),
-      }),
-    getScorecard: () =>
-      apiRequest<any>('/suppliers/scorecards'),
-    getReplay: (disruptionId: string, upTo?: number) =>
-      apiRequest<any>(`/disruptions/${disruptionId}/replay${upTo !== undefined ? `?upTo=${upTo}` : ''}`),
     getPlaybook: (disruptionId: string) =>
       apiRequest<any>(`/disruptions/${disruptionId}/playbook`),
     closeDisruption: (disruptionId: string, noAction?: boolean) =>

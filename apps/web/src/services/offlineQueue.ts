@@ -19,6 +19,8 @@ export interface QueuedPing {
   truck_id?: string;
   driver_id?: string;
   created_at?: number;
+  accuracy_m?: number | null;
+  heading?: number | null;
 }
 
 function openDb(): Promise<IDBDatabase> {

@@ -1,404 +1,465 @@
 /**
  * apps/web/src/screens/InvestigationScreen.tsx
  *
- * Screen 4: Disruption Investigation (Bright Executive Theme).
- * - Resolved ETA with reason & lineage basis
- * - Event timeline with state chips (APPLIED, DUPLICATE, STALE, CONFLICT, REJECTED)
- * - Conflict card with Resolve action
- * - B8 Supplier scorecard
- * - A10 Fingerprint banner
- * - A5 Replay tab with scrubber wired to real replay endpoint
- * - Voice panel with confirmation card shown in English and Tamil
+ * Disruption Investigation on real shipment data.
+ *  - Shipment list ranked by real ETA shift, filterable by warehouse
+ *  - Belief-ETA card: promised vs best-known ETA, and the event that set it
+ *  - Live event timeline: updates over WebSocket and by a 15s poll fallback
+ *  - Conflict resolution (Accept / Reject) against the real endpoint
+ *  - Decision replay built from the audit log
+ *  - Supplier scorecard, shown only when real data exists
  */
 
-import { useEffect, useState } from 'react';
-import { api } from '../api/client.js';
-import {
-  StatusChip,
-  RiskBandChip,
-  TimeText,
-  Button,
-  Skeleton,
-  EmptyState,
-  ErrorState,
-} from '../ui/components.js';
-import {
-  Mic,
-  Languages,
-  CheckCircle2,
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, getStoredToken, getStoredUser } from '../api/client.js';
 
-const SAMPLE_TAMIL_TRANSCRIPT =
-  'வணக்கம், லாரி SHP-1042 பெங்களூரு டோல் கேட்டில் டயர் வெடித்து 4 மணி நேரம் தாமதம் ஆனது.';
-const SAMPLE_ENGLISH_TRANSCRIPT =
-  'Hello, truck SHP-1042 had a flat tire at Bangalore toll gate and is delayed by 4 hours.';
+const fmt = (d: string | Date | null | undefined) =>
+  d
+    ? new Date(d).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : '—';
+
+const hrs = (h: number) => `${h > 0 ? '+' : ''}${h} h`;
+
+/** Risk band derived from the real shift. Thresholds are a display choice; adjust to your policy. */
+function riskFor(shift: number): { label: string; cls: string } {
+  if (shift >= 4) return { label: 'HIGH', cls: 'bg-rose-100 text-rose-800 border-rose-300' };
+  if (shift >= 2) return { label: 'MEDIUM', cls: 'bg-amber-100 text-amber-800 border-amber-300' };
+  if (shift > 0) return { label: 'LOW', cls: 'bg-sky-100 text-sky-800 border-sky-300' };
+  return { label: 'ON TRACK', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+}
+
+const STATUS_CLS: Record<string, string> = {
+  APPLIED: 'bg-emerald-100 text-emerald-800',
+  DUPLICATE: 'bg-slate-200 text-slate-700',
+  STALE: 'bg-slate-200 text-slate-700',
+  CONFLICT: 'bg-rose-100 text-rose-800',
+  REJECTED: 'bg-rose-100 text-rose-800',
+  PENDING: 'bg-amber-100 text-amber-800',
+};
 
 export function InvestigationScreen() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [disruptions, setDisruptions] = useState<any[]>([]);
-  const [selectedDisruption, setSelectedDisruption] = useState<any>(null);
-  const [events, setEvents] = useState<any[]>([]);
+  const [shipments, setShipments] = useState<any[]>([]);
+  const [warehouse, setWarehouse] = useState<string>('ALL');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<any>(null);
+  const [steps, setSteps] = useState<any[]>([]);
+  const [tab, setTab] = useState<'timeline' | 'replay'>('timeline');
+  const [scrub, setScrub] = useState<number>(0);
   const [scorecards, setScorecards] = useState<any[]>([]);
-  const [playbookCases, setPlaybookCases] = useState<any[]>([]);
+  const [live, setLive] = useState<boolean>(false);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // A5 Decision Replay State
-  const [replayActive, setReplayActive] = useState(false);
-  const [replaySteps, setReplaySteps] = useState<any[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const selectedRef = useRef<string | null>(null);
+  selectedRef.current = selectedId;
 
-  // Voice report panel
-  const [tamilTranscript, setTamilTranscript] = useState(SAMPLE_TAMIL_TRANSCRIPT);
-  const [englishTranscript, setEnglishTranscript] = useState(SAMPLE_ENGLISH_TRANSCRIPT);
-  const [confirmedVoice, setConfirmedVoice] = useState(false);
+  const fetchDetail = useCallback(async (id: string) => {
+    const [d, r] = await Promise.all([
+      api.investigation.getShipment(id),
+      api.investigation.getReplay(id).catch(() => ({ steps: [] })),
+    ]);
+    setDetail(d);
+    const s = r.steps || [];
+    setSteps(s);
+    return s;
+  }, []);
 
-  const fetchDisruptions = async () => {
+  const refreshAll = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      const list = await api.investigation.getDisruptions().catch(() => []);
-      setDisruptions(list);
-      if (list.length > 0) {
-        setSelectedDisruption(list[0]);
+      const list = await api.investigation.listShipments();
+      const rows = list.shipments || [];
+      setShipments(rows);
+
+      const id = selectedRef.current ?? rows[0]?._id ?? null;
+      if (id) {
+        setSelectedId(id);
+        await fetchDetail(id);
       }
 
-      const sc = await api.investigation.getScorecard().catch(() => ({ scorecards: [] }));
-      setScorecards(sc?.scorecards || []);
+      const sc: any = await api.investigation.getScorecard().catch(() => []);
+      setScorecards(Array.isArray(sc) ? sc : sc?.scorecards || []);
+      setError(null);
     } catch (e: any) {
-      setError(e.message || 'Failed to load disruptions');
+      setError(e.message || 'Could not load investigation data');
     } finally {
       setLoading(false);
     }
+  }, [fetchDetail]);
+
+  const selectShipment = async (id: string) => {
+    setSelectedId(id);
+    setTab('timeline');
+    const s = await fetchDetail(id);
+    setScrub(Math.max(0, s.length - 1));
   };
 
+  // Initial load, plus a 15s poll so the page stays correct even if the socket drops
   useEffect(() => {
-    fetchDisruptions();
-  }, []);
+    refreshAll();
+    const t = setInterval(refreshAll, 15000);
+    return () => clearInterval(t);
+  }, [refreshAll]);
 
-  // When selected disruption changes, load its events, replay, and playbook
+  // Live updates over WebSocket
   useEffect(() => {
-    if (!selectedDisruption) return;
+    const token = getStoredToken();
+    if (!token) return;
 
-    const loadDetails = async () => {
-      try {
-        const shipmentId =
-          selectedDisruption.shipment_id?._id || selectedDisruption.shipment_id;
+    let ws: WebSocket | null = null;
+    let closed = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
 
-        if (shipmentId) {
-          const evts = await api.investigation.getEvents(shipmentId).catch(() => []);
-          setEvents(evts);
-        }
-
-        const rep = await api.investigation.getReplay(selectedDisruption._id).catch(() => ({ steps: [] }));
-        setReplaySteps(rep?.steps || []);
-        setCurrentStepIndex((rep?.steps?.length || 1) - 1);
-
-        const pb = await api.investigation.getPlaybook(selectedDisruption._id).catch(() => ({ cases: [] }));
-        setPlaybookCases(pb?.cases || []);
-      } catch {
-        // Ignored
-      }
+    // Small delay: a report inside an open transaction may not be committed yet when the push arrives
+    const scheduleRefresh = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => refreshAll(), 400);
     };
 
-    loadDetails();
-  }, [selectedDisruption]);
+    const connect = () => {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${window.location.host}/ws`);
 
-  const handleResolveConflict = async (eventId: string, resolution: string) => {
+      ws.onopen = () => ws?.send(JSON.stringify({ type: 'auth', token }));
+
+      ws.onmessage = (e) => {
+        let m: any;
+        try {
+          m = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+        if (m.type === 'auth_ok') {
+          ws?.send(JSON.stringify({ type: 'subscribe', topic: 'shipments' }));
+        }
+        if (m.type === 'subscribed') setLive(true);
+        if (m.type === 'event' && m.topic === 'shipments' && m.data?.type === 'SHIPMENT_EVENT') {
+          setBanner(
+            `New ${m.data.source} report for ${m.data.shipment_code}: ${m.data.status}${
+              m.data.reason ? ` (${m.data.reason})` : ''
+            }`,
+          );
+          scheduleRefresh();
+        }
+      };
+
+      ws.onclose = () => {
+        setLive(false);
+        if (!closed) retry = setTimeout(connect, 3000);
+      };
+    };
+
+    connect();
+    return () => {
+      closed = true;
+      if (retry) clearTimeout(retry);
+      if (debounce) clearTimeout(debounce);
+      ws?.close();
+    };
+  }, [refreshAll]);
+
+  const resolveConflict = async (conflictEventId: string, accept: boolean) => {
+    const basisId = detail?.shipment?.eta_basis_event_id;
+    const chosen = accept ? conflictEventId : basisId;
+    if (!chosen) {
+      setBanner('Cannot reject: there is no current basis event to keep.');
+      return;
+    }
+    const who = getStoredUser()?.username ?? 'analyst';
     try {
-      await api.investigation.resolveConflict(eventId, resolution);
-      alert(`Conflict resolved with action: ${resolution}`);
-      // Refresh events
-      if (selectedDisruption?.shipment_id) {
-        const shipmentId = selectedDisruption.shipment_id?._id || selectedDisruption.shipment_id;
-        const evts = await api.investigation.getEvents(shipmentId);
-        setEvents(evts);
-      }
+      await api.investigation.resolveConflict(conflictEventId, {
+        chosen_event_id: chosen,
+        reason: `Reviewed by ${who}: ${accept ? 'accepted' : 'rejected'} the conflicting report`,
+      });
+      setBanner(`Conflict resolved: ${accept ? 'new report accepted' : 'kept current ETA'}.`);
+      await refreshAll();
     } catch (e: any) {
-      alert(`Resolution failed: ${e.message}`);
+      setBanner(`Resolution failed: ${e.message}`);
     }
   };
 
-  if (loading && disruptions.length === 0) {
-    return (
-      <div className="p-6 space-y-6">
-        <Skeleton className="h-20 w-full" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="h-96 col-span-2" />
-          <Skeleton className="h-96" />
-        </div>
-      </div>
-    );
-  }
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const s = detail?.shipment;
+  const shift = s?.shift_hours ?? 0;
+  const risk = riskFor(shift);
+  const timeline: any[] = detail?.timeline || [];
+  const lineage = detail?.lineage;
+  const warehouses = Array.from(new Set(shipments.map((x) => x.warehouse?.code).filter(Boolean))) as string[];
+  const visible = warehouse === 'ALL' ? shipments : shipments.filter((x) => x.warehouse?.code === warehouse);
 
-  const shipment = selectedDisruption?.shipment_id;
+  if (loading && shipments.length === 0) {
+    return <div className="p-6 text-sm text-slate-500">Loading investigation data…</div>;
+  }
 
   return (
     <div className="p-6 space-y-6 text-slate-900 max-w-7xl mx-auto">
-      {/* Top Header & Disruption Selector */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Disruption Investigation</h1>
-          <p className="text-xs text-slate-500">
-            Event reconciliation, truth audit, decision replay, and voice-assisted field intake
-          </p>
+          <h1 className="text-xl font-bold tracking-tight">Disruption Investigation</h1>
+          <p className="text-xs text-slate-500">Live ETA reconciliation, event timeline, and decision replay</p>
         </div>
-
-        {disruptions.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">Select Disruption:</span>
-            <select
-              value={selectedDisruption?._id}
-              onChange={(e) => {
-                const found = disruptions.find((d) => d._id === e.target.value);
-                if (found) setSelectedDisruption(found);
-              }}
-              className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
-            >
-              {disruptions.map((d) => (
-                <option key={d._id} value={d._id}>
-                  {d.disruption_type} · {d.shipment_id?.code || 'SHP'} ({d.severity})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <span
+            className={`text-[11px] font-semibold px-2 py-1 rounded-full border ${
+              live ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}
+          >
+            {live ? '● Live' : '● Polling every 15s'}
+          </span>
+          <select
+            value={warehouse}
+            onChange={(e) => setWarehouse(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs"
+          >
+            <option value="ALL">All warehouses</option>
+            {warehouses.map((w) => (
+              <option key={w} value={w}>
+                {w}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {error && <ErrorState message={error} />}
+      {banner && (
+        <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex justify-between">
+          <span>{banner}</span>
+          <button onClick={() => setBanner(null)} className="font-bold">
+            ✕
+          </button>
+        </div>
+      )}
+      {error && <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">{error}</div>}
 
-      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (2 spans): Resolved ETA & Timeline / Replay */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Resolved ETA Card */}
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                Belief-ETA Reconciliation (Step 5B)
-              </span>
-              <RiskBandChip band={selectedDisruption?.severity} />
-            </div>
-
-            <div className="flex flex-wrap items-baseline gap-6 pt-1">
-              <div>
-                <span className="text-xs text-slate-500 block">Current ETA</span>
-                <TimeText date={shipment?.current_eta || selectedDisruption?.detected_at} className="text-sm font-bold text-amber-700" />
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">Promised ETA</span>
-                <TimeText date={shipment?.promised_eta || selectedDisruption?.detected_at} className="text-sm font-mono text-slate-700 font-medium" />
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">Total Shift</span>
-                <span className="text-sm font-mono font-bold text-rose-700">
-                  +{selectedDisruption?.delay_hours ?? 4} Hours
-                </span>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 pt-1">
-              <strong className="text-slate-800">Lineage Basis:</strong> Carrier webhook reported severe traffic delay at Toll Plaza. Reconciler
-              selected latest trusted timestamp over GPS stale beacon.
-            </p>
-          </div>
-
-          {/* Timeline vs Decision Replay Toggle */}
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
-            {playbookCases.length > 0 && (
-              <div className="p-3.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-900">
-                <span className="font-semibold text-indigo-950">Playbook Memory Insight (A6):</span>{' '}
-                {playbookCases[0].insight}
-              </div>
-            )}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setReplayActive(false)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
-                    !replayActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Event Timeline ({events.length})
-                </button>
-                <button
-                  onClick={() => setReplayActive(true)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
-                    replayActive ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  A5 Decision Replay ({replaySteps.length} Steps)
-                </button>
-              </div>
-
-              {replayActive && (
-                <span className="text-[11px] font-mono text-indigo-600 font-semibold">
-                  Step {currentStepIndex + 1} of {replaySteps.length || 1}
-                </span>
-              )}
-            </div>
-
-            {/* View 1: Event Timeline */}
-            {!replayActive ? (
-              <div className="space-y-3">
-                {events.length === 0 ? (
-                  <EmptyState title="No shipment events recorded" description="Waiting for incoming telemetry." />
-                ) : (
-                  events.map((evt: any, i: number) => (
-                    <div
-                      key={evt._id || i}
-                      className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex items-start justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <StatusChip status={evt.status} />
-                          <span className="font-semibold text-slate-900">{evt.event_type}</span>
-                          <span className="text-slate-500 font-mono">({evt.source})</span>
-                        </div>
-                        <p className="text-slate-600 text-[11px]">{evt.notes || 'Inbound telemetry update.'}</p>
-                        <TimeText date={evt.occurred_at || evt.created_at} format="short" />
-                      </div>
-
-                      {evt.status === 'CONFLICT' && (
-                        <div className="shrink-0 space-x-1.5">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleResolveConflict(evt._id, 'ACCEPT')}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => handleResolveConflict(evt._id, 'REJECT')}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : (
-              /* View 2: A5 Decision Replay Scrubber */
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs text-slate-500">
-                    <span>Initial Observation</span>
-                    <span>Current Reconstructed State</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(0, replaySteps.length - 1)}
-                    value={currentStepIndex}
-                    onChange={(e) => setCurrentStepIndex(parseInt(e.target.value, 10))}
-                    className="w-full accent-indigo-600 cursor-pointer"
-                  />
+        {/* Left: shipment list */}
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm space-y-2 lg:max-h-[80vh] overflow-y-auto">
+          <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wider pb-2 border-b border-slate-100">
+            Shipments ({visible.length})
+          </h2>
+          {visible.length === 0 && <p className="text-xs text-slate-500">No shipments in this scope.</p>}
+          {visible.map((x) => {
+            const r = riskFor(x.shift_hours);
+            return (
+              <button
+                key={x._id}
+                onClick={() => selectShipment(x._id)}
+                className={`w-full text-left p-3 rounded-lg border transition ${
+                  selectedId === x._id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm">{x.code}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${r.cls}`}>{r.label}</span>
                 </div>
-
-                {replaySteps[currentStepIndex] ? (
-                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-indigo-700">
-                        {replaySteps[currentStepIndex].action || 'SYSTEM_SNAPSHOT'}
-                      </span>
-                      <TimeText date={replaySteps[currentStepIndex].timestamp} />
-                    </div>
-                    <p className="text-slate-700">{replaySteps[currentStepIndex].description || 'State snapshot.'}</p>
-                    <div className="p-2 rounded bg-white border border-slate-200 font-mono text-[11px] text-slate-800">
-                      Reconstructed Status: <strong className="text-slate-900">{replaySteps[currentStepIndex].reconstructed_state?.status || 'NORMAL'}</strong>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-500">No replay steps captured yet.</div>
-                )}
-              </div>
-            )}
-          </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {x.warehouse?.code ?? '—'} · {x.supplier_name ?? 'Unknown supplier'}
+                </div>
+                <div className="flex justify-between text-[11px] mt-1">
+                  <span className={x.shift_hours > 0 ? 'text-rose-700 font-semibold' : 'text-slate-600'}>
+                    {hrs(x.shift_hours)}
+                  </span>
+                  <span className="text-slate-500">
+                    {x.events} events{x.conflicts > 0 ? ` · ${x.conflicts} conflict` : ''}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Right Column: B8 Supplier Scorecard & Voice Confirm Panel */}
-        <div className="space-y-6">
-          {/* B8 Supplier Scorecard */}
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
-            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider pb-2 border-b border-slate-100">
-              B8 Supplier Performance Scorecard
-            </h3>
+        {/* Right: detail */}
+        <div className="lg:col-span-2 space-y-6">
+          {!s ? (
+            <div className="p-8 rounded-xl bg-white border border-dashed border-slate-300 text-center text-sm text-slate-500">
+              Select a shipment to investigate.
+            </div>
+          ) : (
+            <>
+              {/* Belief-ETA card */}
+              <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Belief-ETA · {s.code}
+                  </span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${risk.cls}`}>{risk.label}</span>
+                </div>
 
-            {scorecards.length === 0 ? (
-              <div className="text-xs text-slate-500">Scorecard calculating...</div>
-            ) : (
-              <div className="space-y-2 text-xs">
-                {scorecards.slice(0, 3).map((sc: any, idx: number) => (
-                  <div key={idx} className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="flex items-center justify-between font-semibold text-slate-900">
-                      <span>{sc.supplier_name || 'Tata Logistics'}</span>
-                      <span className={sc.on_time_rate < 0.7 ? 'text-rose-700 font-bold' : 'text-emerald-700 font-bold'}>
-                        {sc.on_time_rate ? `${Math.round(sc.on_time_rate * 100)}% OTD` : 'Calculating'}
-                      </span>
+                <div className="flex flex-wrap gap-8 pt-1">
+                  <div>
+                    <span className="text-xs text-slate-500 block">Best-known ETA</span>
+                    <span className="text-sm font-bold text-amber-700">{fmt(s.resolved_eta ?? s.current_eta)}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">Promised ETA</span>
+                    <span className="text-sm font-mono text-slate-700">{fmt(s.promised_eta)}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">Shift vs promise</span>
+                    <span className={`text-sm font-mono font-bold ${shift > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {hrs(shift)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">Warehouse</span>
+                    <span className="text-sm">{s.warehouse ? `${s.warehouse.code} · ${s.warehouse.name}` : '—'}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 pt-1">
+                  <strong className="text-slate-800">Lineage basis: </strong>
+                  {lineage
+                    ? `${lineage.event_type} from ${lineage.source} at ${fmt(lineage.event_time)} set the ETA to ${fmt(
+                        lineage.reported_eta,
+                      )}. ${lineage.reason ?? ''}`
+                    : 'No accepted ETA report yet. Showing the planned ETA.'}
+                </p>
+                {s.review_status === 'UNDER_REVIEW' && (
+                  <p className="text-xs font-semibold text-rose-700">
+                    Under review: conflicting trusted reports need a decision (see timeline).
+                  </p>
+                )}
+              </div>
+
+              {/* Timeline / Replay */}
+              <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  {(['timeline', 'replay'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-md ${
+                        tab === t ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {t === 'timeline' ? `Event timeline (${timeline.length})` : `Decision replay (${steps.length})`}
+                    </button>
+                  ))}
+                </div>
+
+                {tab === 'timeline' ? (
+                  timeline.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-slate-500 border border-dashed border-slate-300 rounded-lg">
+                      No events for this shipment yet. Driver delay reports and carrier updates appear here live.
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Total: {sc.total_shipments} Shipments</span>
-                      <span>Avg Delay: +{sc.avg_delay_hours || 0}h</span>
+                  ) : (
+                    <div className="space-y-3">
+                      {timeline.map((evt) => (
+                        <div
+                          key={evt._id}
+                          className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex items-start justify-between gap-3 text-xs"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded-full font-bold ${
+                                  STATUS_CLS[evt.reconcile_status] ?? STATUS_CLS.PENDING
+                                }`}
+                              >
+                                {evt.reconcile_status}
+                              </span>
+                              <span className="font-semibold">{evt.event_type}</span>
+                              <span className="font-mono text-slate-500">{evt.source}</span>
+                              {evt.delay_hours != null && (
+                                <span className="text-rose-700 font-semibold">+{evt.delay_hours} h reported</span>
+                              )}
+                            </div>
+                            {evt.note && <p className="text-slate-700">{evt.note}</p>}
+                            {evt.location && <p className="text-slate-500">Location: {evt.location}</p>}
+                            <p className="text-slate-500">
+                              Received {fmt(evt.ingested_at)}
+                              {evt.reported_eta ? ` · reported ETA ${fmt(evt.reported_eta)}` : ''}
+                            </p>
+                            {evt.reconcile_reason && <p className="text-slate-500 italic">{evt.reconcile_reason}</p>}
+                          </div>
+
+                          {evt.reconcile_status === 'CONFLICT' && (
+                            <div className="shrink-0 flex gap-1.5">
+                              <button
+                                onClick={() => resolveConflict(evt._id, true)}
+                                className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-semibold"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => resolveConflict(evt._id, false)}
+                                className="px-2.5 py-1 rounded-md bg-rose-600 text-white font-semibold"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : steps.length === 0 ? (
+                  <div className="text-xs text-slate-500">No audit steps recorded for this shipment yet.</div>
+                ) : (
+                  <div className="space-y-4">
+                    <input
+                      type="range"
+                      min={0}
+                      max={steps.length - 1}
+                      value={Math.min(scrub, steps.length - 1)}
+                      onChange={(e) => setScrub(parseInt(e.target.value, 10))}
+                      className="w-full accent-indigo-600"
+                    />
+                    <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-indigo-700">
+                          Step {steps[Math.min(scrub, steps.length - 1)].step_number} of {steps.length} ·{' '}
+                          {steps[Math.min(scrub, steps.length - 1)].action}
+                        </span>
+                        <span className="text-slate-500">
+                          {fmt(steps[Math.min(scrub, steps.length - 1)].timestamp)}
+                        </span>
+                      </div>
+                      <p>{steps[Math.min(scrub, steps.length - 1)].description}</p>
+                      <div className="font-mono text-[11px] p-2 bg-white border border-slate-200 rounded">
+                        ETA at this step:{' '}
+                        <strong>
+                          {fmt(steps[Math.min(scrub, steps.length - 1)].resolved_eta_at_step)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Supplier scorecard: only real data */}
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
+            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider pb-2 border-b border-slate-100">
+              Supplier performance
+            </h3>
+            {scorecards.length === 0 ? (
+              <div className="text-xs text-slate-500">No scored suppliers yet. A scorecard needs completed shipments.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {scorecards.slice(0, 3).map((sc: any, i: number) => (
+                  <div key={i} className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="font-semibold">{sc.supplier_name ?? sc.name ?? sc.supplier_code ?? 'Supplier'}</div>
+                    <div className="text-slate-600">
+                      On-time: {sc.on_time_rate != null ? `${Math.round(sc.on_time_rate * 100)}%` : '—'}
+                    </div>
+                    <div className="text-slate-500">
+                      {sc.total_shipments ?? 0} shipments · avg delay +{sc.avg_delay_hours ?? 0} h
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Voice Panel with Tamil & English Confirm Card */}
-          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Mic className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-semibold text-slate-900">Voice Field Report (English & தமிழ்)</h3>
-              </div>
-              <Languages className="w-4 h-4 text-slate-400" />
-            </div>
-
-            <div className="space-y-2.5">
-              <div>
-                <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">
-                  Tamil Transcript (தமிழ்)
-                </label>
-                <textarea
-                  rows={2}
-                  value={tamilTranscript}
-                  onChange={(e) => setTamilTranscript(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">
-                  English Translated Entity Extraction
-                </label>
-                <textarea
-                  rows={2}
-                  value={englishTranscript}
-                  onChange={(e) => setEnglishTranscript(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md text-xs text-slate-900 shadow-xs focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="pt-2">
-                <Button
-                  variant={confirmedVoice ? 'secondary' : 'primary'}
-                  size="sm"
-                  className="w-full justify-center"
-                  onClick={() => {
-                    setConfirmedVoice(true);
-                    alert('Field report verified and merged into shipment belief timeline.');
-                  }}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                  {confirmedVoice ? 'Report Confirmed' : 'Confirm & Ingest Field Report'}
-                </Button>
-              </div>
-            </div>
           </div>
         </div>
       </div>

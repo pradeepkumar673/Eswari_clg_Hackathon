@@ -37,6 +37,7 @@ const ConfigSchema = z.object({
   SIM_TRUCK_KMH: z.coerce.number().default(50),
   CCTV_EVIDENCE_DIR: z.string().default('./.data/evidence'),
   VISION_URL: z.string().url().default('http://127.0.0.1:8010'),
+  ASSIST_RADIUS_KM: z.coerce.number().default(50),
 });
 
 export const config = ConfigSchema.parse(process.env);

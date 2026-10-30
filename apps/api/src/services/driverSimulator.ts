@@ -16,6 +16,7 @@ import { User } from '../models/users.js';
 import { simClock } from './simClock.js';
 import { broadcastToTopic } from './websocket.js';
 import { haversineDistanceKm } from './nearestWarehouse.js';
+import { validateFix } from './gpsFix.js';
 
 export const GEOFENCE_RADIUS_M = 1000; // 1 km geofence around warehouse
 const MAX_SNAP_METERS = 300; // 300 meters maximum road snapping
@@ -29,6 +30,8 @@ export interface InputPing {
   lat: number;
   lng: number;
   speed_kmh: number;
+  accuracy_m?: number | null;
+  heading?: number | null;
   source?: 'SIM' | 'DRIVER_DEVICE';
 }
 
@@ -200,6 +203,30 @@ export async function intakeDriverPings(
       continue;
     }
 
+    const prev = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+    const verdict = validateFix(
+      {
+        seq: item.seq,
+        ts: item.ts,
+        lat: item.lat,
+        lng: item.lng,
+        accuracy_m: item.accuracy_m ?? null,
+        speed_kmh: item.speed_kmh,
+        heading: item.heading ?? null,
+      },
+      prev ? { ts: prev.ts, lat: prev.lat, lng: prev.lng } : null,
+    );
+    if (!verdict.ok) {
+      processedDocs.push({
+        driver_id: driverId,
+        truck_id: truckId,
+        seq: item.seq,
+        status: 'REJECTED',
+        reason: verdict.reason,
+      });
+      continue;
+    }
+
     const { lane_id, km_on_lane } = await snapPingToLane(item.lat, item.lng);
 
     const doc = await DriverPing.create({
@@ -211,7 +238,9 @@ export async function intakeDriverPings(
       lng: item.lng,
       lane_id,
       km_on_lane,
-      speed_kmh: item.speed_kmh,
+      speed_kmh: verdict.speed_kmh,
+      accuracy_m: item.accuracy_m ?? null,
+      heading: item.heading ?? null,
       source: item.source || 'DRIVER_DEVICE',
       created_at: new Date(),
     });

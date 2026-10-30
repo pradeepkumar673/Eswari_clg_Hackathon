@@ -32,9 +32,11 @@ import { askDeskRouter } from './routes/askDesk.js';
 import { whatifRouter } from './routes/whatif.js';
 import { adminOpsRouter } from './routes/adminOps.js';
 import { trackingRouter } from './routes/tracking.js';
+import { driverRealtimeRouter } from './routes/driverRealtime.js';
 import { claimsRouter } from './routes/claims.js';
 import { cctvRouter } from './routes/cctv.js';
 import { zonesRouter } from './routes/zones.js';
+import { investigationRouter } from './routes/investigation.js';
 import { initNotificationSubscribers } from './services/notifications.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
@@ -209,6 +211,10 @@ app.use('/admin', adminOpsRouter);
 // Step 19 & 21 Tracking, Driver, Reroute & Simulation Routers
 app.use('/api/v1', trackingRouter);
 app.use('/', trackingRouter);
+app.use('/api/v1', driverRealtimeRouter);
+app.use('/', driverRealtimeRouter);
+app.use('/api/v1', investigationRouter);
+app.use('/', investigationRouter);
 
 app.use('/api/v1/claims', claimsRouter);
 app.use('/claims', claimsRouter);

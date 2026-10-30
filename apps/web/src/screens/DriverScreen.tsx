@@ -31,6 +31,7 @@ import { getStoredToken, getStoredUser } from '../api/client.js';
 import { enqueuePing, getPendingCount, flushQueue, QueuedPing } from '../services/offlineQueue.js';
 import { startGpsWatch, haversineKm, GpsFix } from '../services/gpsWatcher.js';
 import { DriverMap, AssistMapItem } from '../ui/DriverMap.js';
+import { DelayReportCard } from '../ui/DelayReportCard.js';
 
 const MIN_MOVE_M = 20;
 const MAX_PING_INTERVAL_MS = 15000;
@@ -550,6 +551,9 @@ export function DriverScreen() {
           )}
         </div>
       </div>
+
+      {/* Driver Delay Report */}
+      <DelayReportCard truckId={truckId} />
 
       {/* Incident actions */}
       {activeIncident && (

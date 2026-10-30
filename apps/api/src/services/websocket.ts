@@ -38,7 +38,7 @@ export interface ClientConnection {
 let wss: WebSocketServer | null = null;
 const clients = new Map<WebSocket, ClientConnection>();
 
-export type SubscriptionTopic = 'tracking' | 'cctv' | 'zones' | 'capacity' | 'presence' | 'alerts';
+export type SubscriptionTopic = 'tracking' | 'cctv' | 'zones' | 'capacity' | 'presence' | 'alerts' | 'driver' | 'shipments';
 
 const TOPIC_PERMISSIONS: Record<SubscriptionTopic, Capability[]> = {
   tracking: ['tracking.read.all', 'tracking.read.warehouse', 'tracking.read.own'],
@@ -47,6 +47,8 @@ const TOPIC_PERMISSIONS: Record<SubscriptionTopic, Capability[]> = {
   capacity: ['capacity.view'],
   presence: ['presence.read'],
   alerts: ['view_cockpit'],
+  driver: ['driver.ping'],
+  shipments: ['view_cockpit'],
 };
 
 /**
@@ -311,6 +313,15 @@ export async function broadcastToTopic(
         } else if (matchesWh(payload)) {
           filteredPayload = payload;
         }
+      } else {
+        filteredPayload = payload;
+      }
+    } else if (topic === 'driver') {
+      const targets: string[] = Array.isArray(payload.target_driver_ids) ? payload.target_driver_ids : [];
+      filteredPayload = client.driver_id && targets.includes(client.driver_id) ? payload : null;
+    } else if (topic === 'shipments') {
+      if (client.role === 'Warehouse_Operator' && client.warehouse_id) {
+        filteredPayload = payload.warehouse_id === client.warehouse_id ? payload : null;
       } else {
         filteredPayload = payload;
       }

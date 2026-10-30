@@ -10,6 +10,8 @@ export interface IDriverPing extends Document {
   lane_id: string | null;
   km_on_lane: number | null;
   speed_kmh: number;
+  accuracy_m?: number | null;
+  heading?: number | null;
   source: 'SIM' | 'DRIVER_DEVICE';
   created_at: Date;
 }
@@ -24,6 +26,8 @@ const driverPingSchema = new Schema<IDriverPing>({
   lane_id: { type: String, default: null },
   km_on_lane: { type: Number, default: null },
   speed_kmh: { type: Number, required: true, min: 0 },
+  accuracy_m: { type: Number, default: null },
+  heading: { type: Number, default: null },
   source: { type: String, required: true, enum: ['SIM', 'DRIVER_DEVICE'], default: 'SIM' },
   created_at: { type: Date, default: Date.now },
 }, { collection: 'driver_pings' });

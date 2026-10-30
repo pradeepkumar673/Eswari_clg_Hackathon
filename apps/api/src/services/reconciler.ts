@@ -20,6 +20,7 @@ import { writeAudit } from './audit.js';
 import { domainBus } from './bus.js';
 import { simClock } from './simClock.js';
 import { withTransaction } from '../db/withTransaction.js';
+import { broadcastToTopic } from './websocket.js';
 
 export interface IncomingEvent {
   source: string;            // CARRIER_API | FIELD_REPORT | SUPPLIER_PORTAL | CSV | EMAIL_TEXT
@@ -50,10 +51,25 @@ export async function reconcile(
   event: IncomingEvent,
   session?: ClientSession,
 ): Promise<ReconcileResult> {
-  if (!session) {
-    return withTransaction((s) => reconcileInTx(event, s));
-  }
-  return reconcileInTx(event, session);
+  const result = session
+    ? await reconcileInTx(event, session)
+    : await withTransaction((s) => reconcileInTx(event, s));
+
+  // Live push: every outcome (APPLIED, CONFLICT, STALE, DUPLICATE, REJECTED) reaches the investigation screen.
+  const sh: any = await Shipment.findOne({ code: event.shipment_code }).lean();
+  await broadcastToTopic('shipments', {
+    type: 'SHIPMENT_EVENT',
+    shipment_code: event.shipment_code,
+    warehouse_id: sh ? String(sh.warehouse_id) : null,
+    event_type: event.event_type,
+    source: event.source,
+    status: result.status,
+    reason: result.reason,
+    reported_eta: event.reported_eta ?? null,
+    ts: new Date().toISOString(),
+  });
+
+  return result;
 }
 
 async function reconcileInTx(

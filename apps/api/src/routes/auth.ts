@@ -64,6 +64,14 @@ function userPayload(user: any) {
   };
 }
 
+const USERNAME_ALIASES: Record<string, string> = {
+  analyst1: 'analyst',
+  manager1: 'manager',
+  operator_blr: 'operator',
+  procurement1: 'procurement',
+  admin1: 'admin',
+};
+
 /**
  * Public login endpoint.
  */
@@ -76,7 +84,8 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const user = await User.findOne({ username }).lean();
+    const queryUsername = USERNAME_ALIASES[username] || username;
+    const user = await User.findOne({ username: queryUsername }).lean();
     if (!user) {
       await safeWriteAudit({
         actor: null,
@@ -165,7 +174,7 @@ authRouter.post('/demo-switch', async (req: Request, res: Response): Promise<voi
     }
 
     const query: Record<string, unknown> = {};
-    if (username) query.username = username;
+    if (username) query.username = USERNAME_ALIASES[username] || username;
     else if (role) query.role = new RegExp(`^${role}$`, 'i');
 
     const user = await User.findOne(query).lean();

@@ -544,12 +544,6 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
     { username: 'drv1', display_name: 'Driver 1 (Ramesh)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-1', truck_id: 'SHP-204', supplier_id: null },
     { username: 'drv2', display_name: 'Driver 2 (Karthik)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-2', truck_id: 'SHP-310', supplier_id: null },
     { username: 'sup1', display_name: 'Supplier Rep 1 (Apex)', role: 'SUPPLIER' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: 'SUP-1' },
-    // UI / README aliases (same identities, documented demo usernames)
-    { username: 'analyst1', display_name: 'Priya Analyst', role: 'Analyst' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
-    { username: 'manager1', display_name: 'Rajan Manager', role: 'Manager' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
-    { username: 'operator_blr', display_name: 'Karthik Operator BLR', role: 'Warehouse_Operator' as const, warehouse_id: wh['WH-BLR'], driver_id: null, truck_id: null, supplier_id: null },
-    { username: 'procurement1', display_name: 'Meena Procurement', role: 'Procurement_Approver' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
-    { username: 'admin1', display_name: 'Admin User', role: 'Administrator' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: null },
   ];
 
   const validUsernames = userSeeds.map((u) => u.username);
@@ -567,7 +561,7 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
       display_name: u.display_name,
     });
   }
-  console.log('[seed] Users: 15 users (including demo aliases, 2 DRIVER and 1 SUPPLIER)');
+  console.log('[seed] Users: 10 users (1 Analyst, 2 Managers, 1 Operator, 2 Procurement, 1 Admin, 2 DRIVER, 1 SUPPLIER)');
 
   // ── 11. SourceTrust ───────────────────────────────────────────────────────
   const validSources = ['FIELD_REPORT', 'CARRIER_API', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT'];

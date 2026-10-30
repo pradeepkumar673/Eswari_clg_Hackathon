@@ -67,14 +67,24 @@ export function validateFix(fix: RawFix, prev: PrevFix | null): FixVerdict {
   }
 
   const dtHours = (new Date(fix.ts).getTime() - prev.ts.getTime()) / 3_600_000;
-  if (dtHours < 0) {
+  // Out of order if timestamp is more than 2 minutes in the past relative to prev
+  if (dtHours < -(120 / 3600)) {
     return { ok: false, reason: 'OUT_OF_ORDER' };
   }
 
+  const effectiveDtHours = Math.max(0, dtHours);
   const movedKm = distanceKmPrecise(prev.lat, prev.lng, fix.lat, fix.lng);
-  const impliedKmh = dtHours > 0 ? movedKm / dtHours : 0;
+  const impliedKmh = effectiveDtHours > 0 ? movedKm / effectiveDtHours : 0;
 
-  if (impliedKmh > MAX_PLAUSIBLE_KMH) {
+  // Teleport detection:
+  // 1. Device reports impossible speed (> 180 km/h)
+  // 2. Or without device speed, implied speed > 180 km/h over > 2 km
+  // 3. Or even with device speed, vehicle teleported > 50 km in a single fix
+  if (
+    (deviceSpeed != null && deviceSpeed > MAX_PLAUSIBLE_KMH) ||
+    (deviceSpeed == null && movedKm > 2 && impliedKmh > MAX_PLAUSIBLE_KMH) ||
+    movedKm > 50
+  ) {
     return { ok: false, reason: 'TELEPORT' };
   }
 

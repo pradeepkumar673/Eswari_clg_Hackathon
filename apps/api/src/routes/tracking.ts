@@ -24,6 +24,8 @@ import {
   InputPing,
 } from '../services/driverSimulator.js';
 import { config } from '../config.js';
+import { matchAssistResponders } from '../services/assistMatcher.js';
+import { distanceKmPrecise } from '../services/gpsFix.js';
 
 export const trackingRouter = Router();
 
@@ -348,6 +350,20 @@ trackingRouter.post(
         created_at: new Date(),
       });
 
+      // accept the device fix sent by the new DriverScreen
+      if (req.body.gps && Number.isFinite(req.body.gps.lat) && Number.isFinite(req.body.gps.lng)) {
+        const last = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+        await intakeDriverPings(driverId, truckId, [{
+          seq: (last?.seq ?? 0) + 1,
+          ts: req.body.gps.ts ?? new Date(),
+          lat: req.body.gps.lat,
+          lng: req.body.gps.lng,
+          speed_kmh: 0,
+          accuracy_m: req.body.gps.accuracy_m ?? null,
+          source: 'DRIVER_DEVICE',
+        } as any]);
+      }
+
       let proposal: any = null;
 
       // BREAKDOWN or ACCIDENT creates one PENDING proposal with nearest warehouse
@@ -392,6 +408,14 @@ trackingRouter.post(
           nearest_warehouse_id: nearest.nearest_warehouse_code,
           road_km: nearest.road_km,
         });
+
+        const fresh = await DriverPing.findOne({ driver_id: driverId }).sort({ seq: -1 }).lean();
+        if (fresh) {
+          await matchAssistResponders(
+            { incident_id: incidentId, kind, truck_id: truckId, driver_id: driverId, driver_name: user.display_name },
+            { lat: fresh.lat, lng: fresh.lng, ts: fresh.ts },
+          );
+        }
       }
 
       res.status(201).json({ incident, proposal });
@@ -477,20 +501,18 @@ trackingRouter.post(
       }
 
       // Check if truck moved since proposal
-      const latestPing = await DriverPing.findOne({ truck_id: proposal.truck_id })
-        .sort({ seq: -1 })
-        .lean();
+      const ageMin = (Date.now() - new Date(proposal.created_at).getTime()) / 60000;
+      const latest = await DriverPing.findOne({ truck_id: proposal.truck_id }).sort({ seq: -1 }).lean();
+      const movedKm = latest && proposal.from_position?.lat != null
+        ? distanceKmPrecise(proposal.from_position.lat, proposal.from_position.lng, latest.lat, latest.lng)
+        : 0;
 
-      if (
-        latestPing &&
-        proposal.from_position?.seq !== undefined &&
-        latestPing.seq > proposal.from_position.seq
-      ) {
+      if (ageMin > 15 || movedKm > 2) {
         proposal.status = 'STALE';
         await proposal.save();
         res.status(409).json({
           error: 'Conflict',
-          message: 'Truck has moved since proposal was generated; proposal is STALE',
+          message: 'Proposal is older than 15 minutes or the truck moved more than 2 km; re-submit',
           status: 'STALE',
         });
         return;
