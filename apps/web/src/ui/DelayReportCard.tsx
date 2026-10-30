@@ -102,3 +102,4 @@ export function DelayReportCard({ truckId }: { truckId: string }) {
     </div>
   );
 }
+

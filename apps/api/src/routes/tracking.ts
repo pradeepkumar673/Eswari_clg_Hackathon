@@ -558,6 +558,20 @@ trackingRouter.post(
         road_km: proposal.road_km,
       });
 
+      const driverUser: any = await User.findOne({ truck_id: proposal.truck_id, role: 'DRIVER' }).lean();
+      if (driverUser?.driver_id) {
+        await broadcastToTopic('driver', {
+          type: 'REROUTE_DECIDED',
+          target_driver_ids: [driverUser.driver_id],
+          proposal_id: proposal.proposal_id,
+          decision: 'APPROVED',
+          warehouse_code: targetWh?.code ?? proposal.nearest_warehouse_id,
+          warehouse_name: targetWh?.name ?? null,
+          lat: targetWh?.lat ?? null,
+          lng: targetWh?.lng ?? null,
+        });
+      }
+
       res.status(200).json({ success: true, proposal });
     } catch (err) {
       next(err);
@@ -600,6 +614,17 @@ trackingRouter.post(
       proposal.decided_by = user.username;
       proposal.reason = `${proposal.reason} | Rejected: ${reason}`;
       await proposal.save();
+
+      const rejectedDriver: any = await User.findOne({ truck_id: proposal.truck_id, role: 'DRIVER' }).lean();
+      if (rejectedDriver?.driver_id) {
+        await broadcastToTopic('driver', {
+          type: 'REROUTE_DECIDED',
+          target_driver_ids: [rejectedDriver.driver_id],
+          proposal_id: proposal.proposal_id,
+          decision: 'REJECTED',
+          reason,
+        });
+      }
 
       res.status(200).json({ success: true, proposal });
     } catch (err) {

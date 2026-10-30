@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { pickArray } from '../utils/normalize.js';
+import { ReroutePanel } from '../ui/ReroutePanel.js';
 import {
   KpiCard,
   StatusChip,
@@ -242,6 +243,9 @@ export function CockpitScreen() {
           onClick={() => setSelectedKpiFilter(selectedKpiFilter === 'penalty' ? null : 'penalty')}
         />
       </div>
+
+      {/* Manager Reroute Decisions Panel */}
+      <ReroutePanel />
 
       {/* Main Grid: Active Disruptions & Alerts Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
