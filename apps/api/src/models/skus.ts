@@ -7,6 +7,7 @@ export interface ISku extends Document {
   weight_kg: number;
   category: string;
   is_critical: boolean;
+  is_active: boolean;
   created_at: Date;
 }
 
@@ -17,7 +18,8 @@ const skuSchema = new Schema<ISku>({
   weight_kg: { type: Number, required: true },
   category: { type: String, required: true },
   is_critical: { type: Boolean, required: true, default: false },
+  is_active: { type: Boolean, default: true },
   created_at: { type: Date, default: Date.now },
-}, { collection: 'skus' });
+}, { collection: 'skus', strict: false });
 
 export const Sku = mongoose.model<ISku>('Sku', skuSchema);

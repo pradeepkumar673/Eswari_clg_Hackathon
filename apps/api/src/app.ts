@@ -20,6 +20,12 @@ import { detectorsRouter } from './routes/detectors.js';
 import { kpisRouter } from './routes/kpis.js';
 import { spofRouter } from './routes/spof.js';
 import { lineageRouter } from './routes/lineage.js';
+import { fingerprintsRouter } from './routes/fingerprints.js';
+import { scorecardsRouter } from './routes/scorecards.js';
+import { projectionsRouter } from './routes/projections.js';
+import { shipmentsRouter } from './routes/shipments.js';
+import { masterDataRouter } from './routes/masterdata.js';
+import { customerNoticesRouter } from './routes/notices.js';
 import { initNotificationSubscribers } from './services/notifications.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
@@ -84,6 +90,9 @@ app.use('/audit', auditRouter);
 app.use('/api/v1/admin', adminTamperRouter);
 app.use('/admin', adminTamperRouter);
 
+app.use('/api/v1/admin', masterDataRouter);
+app.use('/admin', masterDataRouter);
+
 app.use('/api/v1/webhooks', webhookRouter);
 app.use('/webhooks', webhookRouter);
 
@@ -143,6 +152,24 @@ app.use('/risk', spofRouter);
 
 app.use('/api/v1/orders', lineageRouter);
 app.use('/orders', lineageRouter);
+
+app.use('/api/v1/fingerprints', fingerprintsRouter);
+app.use('/fingerprints', fingerprintsRouter);
+
+app.use('/api/v1/suppliers', scorecardsRouter);
+app.use('/suppliers', scorecardsRouter);
+
+app.use('/api/v1/projections', projectionsRouter);
+app.use('/projections', projectionsRouter);
+
+app.use('/api/v1/shipments', shipmentsRouter);
+app.use('/shipments', shipmentsRouter);
+
+app.use('/api/v1', masterDataRouter);
+app.use('/', masterDataRouter);
+
+app.use('/api/v1', customerNoticesRouter);
+app.use('/', customerNoticesRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

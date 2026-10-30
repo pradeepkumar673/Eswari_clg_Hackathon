@@ -18,7 +18,11 @@ export type DomainEvent =
   | 'PLAN_SUBMITTED'
   | 'APPROVAL_DECIDED'
   | 'PLAN_APPROVED'
-  | 'PLAN_EXECUTED';
+  | 'PLAN_EXECUTED'
+  | 'INVENTORY_CORRECTED'
+  | 'CUSTOMER_NOTICE_RELEASED'
+  | 'CHANGES_REQUESTED'
+  | 'DELEGATION_RECEIVED';
 
 export interface DomainEventPayloads {
   IMPORT_COMMITTED: {
@@ -84,6 +88,32 @@ export interface DomainEventPayloads {
     planId: string;
     executedBy: string;
   };
+  INVENTORY_CORRECTED: {
+    warehouseId: string;
+    skuId: string;
+    newOnHand: number;
+    actor: string;
+  };
+  CUSTOMER_NOTICE_RELEASED: {
+    noticeId: string;
+    orderId: string;
+    planId: string;
+    releasedBy: string;
+  };
+  CHANGES_REQUESTED: {
+    planId: string;
+    requestedBy: string;
+    role: string;
+    comment: string;
+    newVersion: number;
+  };
+  DELEGATION_RECEIVED: {
+    delegationId: string;
+    delegatorId: string;
+    delegateId: string;
+    role: string;
+    planId: string | null;
+  };
 }
 
 export type EventHandler<E extends DomainEvent> = (
@@ -120,36 +150,26 @@ class DomainBus {
     payload: DomainEventPayloads[E],
   ): Promise<void> {
     const set = this.handlers.get(event);
-    if (!set || set.size === 0) {
-      return;
-    }
+    if (!set || set.size === 0) return;
 
-    for (const handler of Array.from(set)) {
+    for (const handler of set) {
       try {
         await handler(payload);
       } catch (err) {
         logger.error(
-          { event, err, payload },
-          'Error executing domain bus event handler',
+          { event, error: err instanceof Error ? err.message : String(err) },
+          'Error in domain event handler',
         );
-        throw err;
       }
     }
   }
 
-  /**
-   * Clears all subscribers (useful for tests).
-   */
-  public clearSubscribers(event?: DomainEvent): void {
-    if (event) {
-      this.handlers.delete(event);
-    } else {
-      this.handlers.clear();
-    }
+  public clear(): void {
+    this.handlers.clear();
   }
 }
 
-export const domainBus = new DomainBus();
-export const subscribe = domainBus.subscribe.bind(domainBus);
-export const publish = domainBus.publish.bind(domainBus);
-
+export const bus = new DomainBus();
+export const domainBus = bus;
+export const publish = bus.publish.bind(bus);
+export const subscribe = bus.subscribe.bind(bus);

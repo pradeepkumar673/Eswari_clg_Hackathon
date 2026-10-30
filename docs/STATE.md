@@ -19,7 +19,7 @@ _Last updated: 2026-10-30 by Step 3 (Seed Data & Demo State)_
 | 8 | Proof checker, Decision Contract and governed approvals | **STEP 8: PASS** |
 | 9 | Reservations, conflict court, ledger, rollback, guardrails and promise dates | **STEP 9: PASS** |
 | 10 | Notifications, detectors, alerts, KPIs, SPOF radar, replay, lineage and provenance | **STEP 10: PASS** |
-| 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | NOT STARTED |
+| 11 | Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices | **STEP 11: PASS** |
 | 12 | Ask the Desk, What-If, stress test and red-team (backend complete) | NOT STARTED |
 | 13 | Frontend shell, design system and screens 1 to 4 | NOT STARTED |
 | 14 | Screens 5 and 6, notification drawer, Ask drawer, network map and add-on panels | NOT STARTED |
@@ -228,15 +228,50 @@ old 6 and 7 are new 5; old 8 and 9 are new 6; old 10 and 11 are new 7; old 12 an
     - `GET /audit/verify`: verifies cryptographic hash chains for both `audit_logs` and `execution_ledger`.
     - `POST /admin/demo/tamper`: supports mutating either `audit_logs` or `execution_ledger` for demo tamper detection.
 
+### Step 11 - Playbook, scorecards, delegation, master data, notices (PASS)
+- **Part A: Playbook memory, fingerprints, scorecards, cover & drift (A6, A10, B8, B13)**:
+  - `apps/api/src/services/playbook.ts`:
+    - Computes similarity: 0.35 disruption type + 0.25 supplier/warehouse + 0.20 SKU overlap + 0.20 shortage ratio proximity.
+    - `GET /disruptions/:id/playbook`: returns top-3 closest cases with similarity score and insight text (`method: "rule-based"`).
+    - `POST /disruptions/:id/close`: closes disruption, computes freight cost/late orders from execution ledger, writes live historical case & fingerprint, audited.
+  - `apps/api/src/services/fingerprints.ts` & `apps/api/src/routes/fingerprints.ts`:
+    - Fingerprint code: SHA-256 hash of (type, severity, skus, warehouses). Active at 3+ matching cases.
+    - `GET /fingerprints`: lists fingerprints with occurrence and historical match counts (`method: "rule-based"`).
+    - `GET /disruptions/:id/fingerprints`: returns matching fingerprints and MATCH label when active.
+  - `apps/api/src/services/scorecards.ts` & `apps/api/src/routes/scorecards.ts`:
+    - Computes on-time delivery rate (with 2h grace), average delay hours, and open disruptions.
+    - Hidden (null rate + reason) when fewer than 3 closed shipments.
+    - `GET /suppliers/scorecards`: returns ranked scorecards (`method: "rule-based"`).
+  - `apps/api/src/services/coverDrift.ts`, `apps/api/src/routes/projections.ts` & `apps/api/src/routes/shipments.ts`:
+    - `GET /projections/cover`: days of cover = free stock / (units due in next 7d / 7) with formula string (`method: "rule-based"`).
+    - `GET /shipments/:id/eta-drift`: projection hint after 3+ applied revisions that all moved later, average shift per revision.
+- **Part B: Approval delegation, master data, customer notices (B9, B10, B18)**:
+  - `apps/api/src/services/delegations.ts` & `apps/api/src/routes/approvals.ts`:
+    - `POST /approvals/delegations`: time-boxed same-role delegation, checks delegate is not creator/modifier/admin. Delegator loses approval rights while active.
+    - `GET /approvals/delegations`: lists caller's active delegations.
+    - `DELETE /approvals/delegations/:id`: revokes delegation, audited.
+    - `POST /plans/:id/request-changes`: Manager/Procurement requests changes with comment, voids earlier approvals, increments plan version.
+    - `POST /plans/:id/approve`: supports delegate approval, records `delegated_from` and contract delegations in force.
+    - `GET /approvals/queue`: populates real `delegation_chip` and includes delegated approval duties.
+  - `apps/api/src/routes/masterdata.ts`:
+    - Master Data CRUD: `GET/POST/PATCH/DELETE /admin/master/:entity` with Zod validation. Deactivates rather than hard deletes. Rejects direct `on_hand` editing (400).
+    - Governed Inventory Corrections: `POST /inventory/corrections` (Manager, Admin). Checks stock reserved by open plans (409), writes ledger correction, re-verifies open plans, and publishes `INVENTORY_CORRECTED`.
+  - `apps/api/src/routes/notices.ts`:
+    - `POST /plans/:id/customer-notices`: drafts notices from templates `ON_TIME_RECOVERY` and `SPLIT_ORDER`.
+    - `GET /customer-notices`: lists customer notices.
+    - `POST /customer-notices/:id/release`: Manager only, requires approved/executed plan, verifies `NOTICE_DATE_MATCHES` claim, releases to simulated outbox.
+    - No public or customer-facing route exposed.
+
 ---
 
 ## NEXT STEP
 
-**Step 11 — Playbook, fingerprints, scorecards, cover and drift, delegation, master data and customer notices (A6, A10, B8, B13, B9, B10, B18)**
-- Target Model: SONNET 4.6
+**Step 12 — Ask the Desk, What-If, stress test and red-team (B4, B14, A11, S3)**
+- Target Model: OPUS 4.6
 - Deliverables:
-  - Part A: Playbook memory (A6), fingerprints (A10), supplier scorecards (B8), cover and drift (B13).
-  - Part B: Approval delegation (B9), master data CRUD (B10), customer notices (B18).
+  - Part A: Ask the Desk (B4) and What-If Simulator (B14).
+  - Part B: Stress-Test mode (A11) and Red-Team suite (S3).
+- BACKEND COMPLETE milestone.
 
 ---
 

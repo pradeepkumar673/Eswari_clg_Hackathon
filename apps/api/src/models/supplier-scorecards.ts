@@ -8,6 +8,9 @@ export interface ISupplierScorecard extends Document {
   late_shipments: number;
   avg_delay_hours: number;
   last_calculated_at: Date;
+  hidden?: boolean;
+  hidden_reason?: string | null;
+  open_disruptions?: number;
 }
 
 const supplierScorecardSchema = new Schema<ISupplierScorecard>(
@@ -19,8 +22,11 @@ const supplierScorecardSchema = new Schema<ISupplierScorecard>(
     late_shipments: { type: Number, required: true, default: 0 },
     avg_delay_hours: { type: Number, required: true, default: 0 },
     last_calculated_at: { type: Date, default: Date.now },
+    hidden: { type: Boolean, default: false },
+    hidden_reason: { type: String, default: null },
+    open_disruptions: { type: Number, default: 0 },
   },
-  { collection: 'supplier_scorecards' }
+  { collection: 'supplier_scorecards', strict: false }
 );
 
 export const SupplierScorecard = mongoose.model<ISupplierScorecard>('SupplierScorecard', supplierScorecardSchema);

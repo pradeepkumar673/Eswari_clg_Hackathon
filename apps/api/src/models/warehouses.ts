@@ -7,6 +7,7 @@ export interface IWarehouse extends Document {
   map_y: number;
   processing_hours: number;
   is_hub: boolean;
+  is_active: boolean;
   created_at: Date;
 }
 
@@ -17,7 +18,8 @@ const warehouseSchema = new Schema<IWarehouse>({
   map_y: { type: Number, required: true, min: 0, max: 1000 },
   processing_hours: { type: Number, required: true, default: 2 },
   is_hub: { type: Boolean, required: true, default: false },
+  is_active: { type: Boolean, default: true },
   created_at: { type: Date, default: Date.now },
-}, { collection: 'warehouses' });
+}, { collection: 'warehouses', strict: false });
 
 export const Warehouse = mongoose.model<IWarehouse>('Warehouse', warehouseSchema);

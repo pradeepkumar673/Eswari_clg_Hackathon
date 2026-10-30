@@ -326,7 +326,7 @@ export async function processShipmentImpact(
 }
 
 // Auto-wire to domain bus on module load
-domainBus.subscribe('EVENT_APPLIED', async (payload) => {
+domainBus.subscribe('EVENT_APPLIED', async (payload: any) => {
   try {
     await processShipmentImpact(payload.shipmentId, payload.correlationId, payload.eventId);
   } catch (err) {
@@ -334,7 +334,7 @@ domainBus.subscribe('EVENT_APPLIED', async (payload) => {
   }
 });
 
-domainBus.subscribe('ETA_CHANGED', async (payload) => {
+domainBus.subscribe('ETA_CHANGED', async (payload: any) => {
   try {
     await processShipmentImpact(payload.shipmentId, payload.correlationId);
   } catch (err) {

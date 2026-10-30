@@ -9,6 +9,7 @@ export interface ISupplier extends Document {
   map_y: number;
   on_time_rate: number | null;
   quality_score: number | null;
+  is_active: boolean;
   created_at: Date;
 }
 
@@ -21,7 +22,8 @@ const supplierSchema = new Schema<ISupplier>({
   map_y: { type: Number, required: true, min: 0, max: 1000 },
   on_time_rate: { type: Number, default: null, min: 0, max: 1 },
   quality_score: { type: Number, default: null, min: 0, max: 1 },
+  is_active: { type: Boolean, default: true },
   created_at: { type: Date, default: Date.now },
-}, { collection: 'suppliers' });
+}, { collection: 'suppliers', strict: false });
 
 export const Supplier = mongoose.model<ISupplier>('Supplier', supplierSchema);

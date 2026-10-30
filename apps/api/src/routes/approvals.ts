@@ -1,19 +1,27 @@
 /**
  * apps/api/src/routes/approvals.ts
  *
- * Approvals queue endpoint (Step 8 Part B, M6).
- * GET /approvals/queue
+ * Approvals queue and delegations endpoints (Step 8 Part B, Step 11 Part B, B9).
+ * GET    /approvals/queue
+ * POST   /approvals/delegations
+ * GET    /approvals/delegations
+ * DELETE /approvals/delegations/:id
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticateToken, requireAnyPermission } from '../middleware/auth.js';
+import mongoose from 'mongoose';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { Approval } from '../models/approvals.js';
 import { RecoveryPlan } from '../models/recovery-plans.js';
+import { ApprovalDelegation } from '../models/approval-delegations.js';
+import { User } from '../models/users.js';
+import { createDelegation, revokeDelegation } from '../services/delegations.js';
+import { simClock } from '../services/simClock.js';
 
 export const approvalsRouter = Router();
 
 // ---------------------------------------------------------------------------
-// GET /approvals/queue — pending items matching caller's role
+// GET /approvals/queue — pending items matching caller's role (including active delegations)
 // ---------------------------------------------------------------------------
 approvalsRouter.get(
   '/queue',
@@ -27,9 +35,24 @@ approvalsRouter.get(
         return;
       }
 
-      // Find all PENDING approvals matching caller's role
+      const now = await simClock.now();
+
+      // Find all active delegations where user is delegate
+      const delegationsReceived = await ApprovalDelegation.find({
+        delegate_id: user._id,
+        is_active: true,
+        valid_from: { $lte: now },
+        valid_until: { $gte: now },
+      })
+        .populate('delegator_id', 'username display_name role')
+        .lean();
+
+      // Roles user can approve for (their own, plus any delegated roles)
+      const allowedRoles = [user.role, ...delegationsReceived.map((d: any) => d.role || d.delegator_id?.role)];
+
+      // Find all PENDING approvals matching caller's role or delegated roles
       const pendingApprovals = await Approval.find({
-        required_role: user.role,
+        required_role: { $in: allowedRoles },
         status: 'PENDING',
       })
         .populate('plan_id')
@@ -37,10 +60,26 @@ approvalsRouter.get(
         .lean();
 
       const items = pendingApprovals
-        .filter((a) => a.plan_id) // ensure linked plan exists
+        .filter((a) => a.plan_id)
         .map((a) => {
           const plan = a.plan_id as any;
           const saving = (plan.baseline_value || 0) - (plan.objective_value || plan.total_cost || 0);
+
+          // Find if there's a delegation matching this plan/role
+          const matchingDelegation = delegationsReceived.find((d: any) => {
+            if (d.role && d.role !== a.required_role) return false;
+            if (d.plan_id && !d.plan_id.equals(plan._id)) return false;
+            return true;
+          });
+
+          let delegationChip = null;
+          if (matchingDelegation) {
+            delegationChip = {
+              delegated_from: (matchingDelegation.delegator_id as any)?.display_name || 'Delegator',
+              role: a.required_role,
+              valid_until: matchingDelegation.valid_until,
+            };
+          }
 
           return {
             approval_id: a._id,
@@ -57,12 +96,96 @@ approvalsRouter.get(
             saving,
             created_by: plan.created_by,
             escalation_flag: Boolean(plan.decision_contract?.escalation_approvals_required),
-            delegation_chip: null, // real field, null until Step 11
+            delegation_chip: delegationChip,
           };
         });
 
       res.status(200).json({ queue: items, total: items.length });
     } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /approvals/delegations — Delegate approval authority (Step 11, B9)
+// ---------------------------------------------------------------------------
+approvalsRouter.post(
+  '/delegations',
+  authenticateToken,
+  requirePermission('manage_delegations'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = req.user!;
+      const { delegate_id, role, plan_id, valid_from, valid_to, valid_until } = req.body;
+
+      if (!delegate_id) {
+        res.status(400).json({ error: { code: 'MISSING_FIELD', message: 'delegate_id is required' } });
+        return;
+      }
+
+      const delegation = await createDelegation({
+        delegator_id: user._id,
+        delegate_id,
+        role: role || user.role,
+        plan_id: plan_id || null,
+        valid_from: valid_from || new Date(),
+        valid_to: valid_to || valid_until,
+      });
+
+      res.status(201).json(delegation);
+    } catch (e: any) {
+      if (e.statusCode) {
+        res.status(e.statusCode).json({ error: { code: e.code || 'BAD_REQUEST', message: e.message } });
+        return;
+      }
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /approvals/delegations — List active delegations for caller (Step 11, B9)
+// ---------------------------------------------------------------------------
+approvalsRouter.get(
+  '/delegations',
+  authenticateToken,
+  requirePermission('manage_delegations'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = req.user!;
+      const delegations = await ApprovalDelegation.find({
+        $or: [{ delegator_id: user._id }, { delegate_id: user._id }],
+        is_active: true,
+      })
+        .populate('delegator_id', 'username display_name role')
+        .populate('delegate_id', 'username display_name role')
+        .lean();
+
+      res.status(200).json(delegations);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /approvals/delegations/:id — Revoke active delegation (Step 11, B9)
+// ---------------------------------------------------------------------------
+approvalsRouter.delete(
+  '/delegations/:id',
+  authenticateToken,
+  requirePermission('manage_delegations'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const delegation = await revokeDelegation(id, req.user!._id);
+      res.status(200).json({ ok: true, delegation });
+    } catch (e: any) {
+      if (e.statusCode) {
+        res.status(e.statusCode).json({ error: { code: e.code || 'BAD_REQUEST', message: e.message } });
+        return;
+      }
       next(e);
     }
   },

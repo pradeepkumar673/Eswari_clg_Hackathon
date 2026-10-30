@@ -44,6 +44,7 @@ import { runGuardrailChecks } from '../services/guardrails.js';
 import { computePromiseDatesForPlan } from '../services/promiseDates.js';
 import { GuardrailCheck } from '../models/guardrail-checks.js';
 import { ExecutionLedger } from '../models/execution-ledger.js';
+import { ApprovalDelegation } from '../models/approval-delegations.js';
 import { writeAudit, writeLedgerEntry } from '../services/audit.js';
 import { withTransaction } from '../db/withTransaction.js';
 import { simClock } from '../services/simClock.js';
@@ -765,11 +766,40 @@ plansRouter.post(
         err(res, 403, 'DISTINCT_APPROVER_REQUIRED', 'Each required role needs a distinct approver'); return;
       }
 
-      // 5. Find pending approval row for caller's role
+      const now = await simClock.now();
+
+      // 4b. Delegator rights check: while active delegation exists, delegator loses rights
+      const activeDelegationOut = await ApprovalDelegation.findOne({
+        delegator_id: user._id,
+        is_active: true,
+        valid_from: { $lte: now },
+        valid_until: { $gte: now },
+        $or: [{ plan_id: plan._id }, { plan_id: null }],
+      });
+      if (activeDelegationOut) {
+        err(res, 403, 'DELEGATION_ACTIVE', 'Delegator has active delegation in force and cannot approve this plan');
+        return;
+      }
+
+      // 4c. Check if caller is acting as a delegate
+      const activeDelegationIn = await ApprovalDelegation.findOne({
+        delegate_id: user._id,
+        is_active: true,
+        valid_from: { $lte: now },
+        valid_until: { $gte: now },
+        $or: [{ plan_id: plan._id }, { plan_id: null }],
+      });
+
+      const allowedApprovalRoles: string[] = [user.role];
+      if (activeDelegationIn && activeDelegationIn.role) {
+        allowedApprovalRoles.push(activeDelegationIn.role);
+      }
+
+      // 5. Find pending approval row for caller's role or delegated role
       const approval = await Approval.findOne({
         plan_id: plan._id,
         plan_version: plan.version,
-        required_role: user.role,
+        required_role: { $in: allowedApprovalRoles } as any,
         status: 'PENDING',
       });
       if (!approval) {
@@ -781,11 +811,22 @@ plansRouter.post(
         err(res, 409, 'STALE_CONTRACT_HASH', 'Approval contract hash does not match current plan hash'); return;
       }
 
-      const now = await simClock.now();
       approval.status = 'APPROVED';
       approval.decided_by = user._id;
       approval.decided_at = now;
       approval.comment = req.body.comment || null;
+      if (activeDelegationIn) {
+        approval.delegated_from = activeDelegationIn.delegator_id;
+        if (plan.decision_contract) {
+          plan.decision_contract.delegations_in_force = plan.decision_contract.delegations_in_force || [];
+          plan.decision_contract.delegations_in_force.push({
+            delegator: activeDelegationIn.delegator_id,
+            delegate: user._id,
+            role: approval.required_role,
+          });
+          plan.markModified('decision_contract');
+        }
+      }
       await approval.save();
 
       // 7. Check if all approvals for this version are now approved
@@ -926,6 +967,83 @@ plansRouter.post(
         plan_status: 'REJECTED',
         reason,
         message: 'Plan rejected and reservations released.',
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /plans/:id/request-changes (Manager, Procurement_Approver) — Step 11, B9
+// ---------------------------------------------------------------------------
+plansRouter.post(
+  '/plans/:id/request-changes',
+  authenticateToken,
+  requirePermission('manage_delegations'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid plan id'); return; }
+
+      const user = req.user!;
+      if (!['Manager', 'Procurement_Approver'].includes(user.role)) {
+        err(res, 403, 'FORBIDDEN', `Role ${user.role} is not authorized to request changes`); return;
+      }
+
+      const comment = req.body.comment;
+      if (!comment || typeof comment !== 'string' || !comment.trim()) {
+        err(res, 400, 'COMMENT_REQUIRED', 'Comment is required when requesting changes'); return;
+      }
+
+      const plan = await RecoveryPlan.findById(id);
+      if (!plan) { err(res, 404, 'NOT_FOUND', 'Plan not found'); return; }
+
+      const now = await simClock.now();
+
+      // Void earlier approvals for this plan version
+      await Approval.updateMany(
+        { plan_id: plan._id, plan_version: plan.version },
+        { $set: { status: 'REJECTED', comment: `Changes requested: ${comment}`, decided_at: now } },
+      );
+
+      // Increment plan version and reset to DRAFT
+      const oldVersion = plan.version;
+      plan.version += 1;
+      plan.status = 'DRAFT';
+      if (!plan.modifier_ids) plan.modifier_ids = [];
+      if (!plan.modifier_ids.some((m) => m.equals(user._id))) {
+        plan.modifier_ids.push(user._id);
+      }
+      await plan.save();
+
+      // Release any held reservations since plan is back to draft
+      await releaseStock(plan._id);
+
+      await writeAudit({
+        action: 'PLAN_CHANGES_REQUESTED',
+        actor: user._id,
+        entityType: 'RecoveryPlan',
+        entityId: plan._id.toString(),
+        before: { version: oldVersion, status: 'PENDING_APPROVAL' },
+        after: { version: plan.version, status: 'DRAFT', comment, decision: 'CHANGES_REQUESTED' },
+      });
+
+      await publish('CHANGES_REQUESTED', {
+        planId: plan._id.toString(),
+        requestedBy: user._id.toString(),
+        role: user.role,
+        comment,
+        newVersion: plan.version,
+      });
+
+      res.status(200).json({
+        plan_id: plan._id,
+        version: plan.version,
+        status: plan.status,
+        decision: 'CHANGES_REQUESTED',
+        comment,
+        message: 'Changes requested. Earlier approvals invalidated and plan version incremented.',
       });
     } catch (e) {
       next(e);

@@ -29,6 +29,8 @@ import { AuditLog } from '../models/audit-logs.js';
 import { TransferLane } from '../models/transfer-lanes.js';
 import { getBandForScore } from '../services/impactEngine.js';
 import { getDecisionReplay } from '../services/replay.js';
+import { getSimilarCases, closeDisruptionAndSaveCase } from '../services/playbook.js';
+import { getDisruptionFingerprints } from '../services/fingerprints.js';
 
 export const disruptionsRouter = Router();
 
@@ -397,6 +399,66 @@ disruptionsRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /disruptions/:id/playbook — Playbook memory closest cases (Step 11, A6)
+// ---------------------------------------------------------------------------
+disruptionsRouter.get(
+  '/:id/playbook',
+  authenticateToken,
+  requirePermission('view_intelligence'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await getSimilarCases(id);
+      res.status(200).json(result);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /disruptions/:id/close — Close disruption and write historical case (Step 11, A6)
+// ---------------------------------------------------------------------------
+disruptionsRouter.post(
+  '/:id/close',
+  authenticateToken,
+  requirePermission('close_disruption'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { no_action, reason } = req.body || {};
+      const result = await closeDisruptionAndSaveCase(id, req.user!._id, { no_action, reason });
+      res.status(200).json(result);
+    } catch (e: any) {
+      if (e.statusCode) {
+        res.status(e.statusCode).json({ error: { code: e.code || 'BAD_REQUEST', message: e.message } });
+        return;
+      }
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /disruptions/:id/fingerprints — Fingerprints for disruption (Step 11, A10)
+// ---------------------------------------------------------------------------
+disruptionsRouter.get(
+  '/:id/fingerprints',
+  authenticateToken,
+  requirePermission('view_intelligence'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await getDisruptionFingerprints(id);
+      res.status(200).json(result);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+
+// ---------------------------------------------------------------------------
 // GET /disruptions/:id/replay — Decision Replay (Step 10, A5)
 // ---------------------------------------------------------------------------
 disruptionsRouter.get(
@@ -419,3 +481,4 @@ disruptionsRouter.get(
     }
   },
 );
+
