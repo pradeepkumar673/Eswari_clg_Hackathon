@@ -234,8 +234,8 @@ export const ROLE_PERMISSIONS: Record<Capability, PermissionDefinition> = {
     description: 'Submit breakdown, accident or delay incident report for own truck',
   },
   'reroute.decide': {
-    roles: ['Manager', 'Administrator'],
-    description: 'Approve or reject automated truck reroute proposal',
+    roles: ['Manager'],
+    description: 'Approve or reject automated truck reroute proposal (Supply Chain Manager only)',
   },
   'cctv.ingest': {
     roles: ['Warehouse_Operator', 'Analyst', 'Administrator'],

@@ -126,7 +126,7 @@ export type DriverIncident = z.infer<typeof DriverIncidentSchema>;
 export const RerouteMethodSchema = z.enum(['ROAD_GRAPH', 'STRAIGHT_LINE_ESTIMATE']);
 export type RerouteMethod = z.infer<typeof RerouteMethodSchema>;
 
-export const RerouteStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXECUTED_SIMULATED']);
+export const RerouteStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXECUTED_SIMULATED', 'STALE']);
 export type RerouteStatus = z.infer<typeof RerouteStatusSchema>;
 
 export const RerouteProposalSchema = z.object({
@@ -137,6 +137,7 @@ export const RerouteProposalSchema = z.object({
   from_position: z.record(z.any()),
   nearest_warehouse_id: z.string().min(1),
   road_km: z.number().nonnegative(),
+  path: z.array(z.string()).optional(),
   method: RerouteMethodSchema.default('ROAD_GRAPH'),
   status: RerouteStatusSchema.default('PENDING'),
   proposed_by: z.string().default('system'),

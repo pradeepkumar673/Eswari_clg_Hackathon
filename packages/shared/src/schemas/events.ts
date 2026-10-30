@@ -15,7 +15,9 @@ export const ShipmentEventSourceSchema = z.enum([
   'SUPPLIER_PORTAL',
   'CSV',
   'EMAIL_TEXT',
-  'CCTV'
+  'CCTV',
+  'DRIVER_DEVICE',
+  'SIM',
 ]);
 export type ShipmentEventSource = z.infer<typeof ShipmentEventSourceSchema>;
 
@@ -24,7 +26,8 @@ export const ShipmentEventTypeSchema = z.enum([
   'ETA_UPDATE',
   'DAMAGE',
   'PARTIAL_LOSS',
-  'INVENTORY_CORRECTION'
+  'INVENTORY_CORRECTION',
+  'ARRIVED_GEOFENCE',
 ]);
 export type ShipmentEventType = z.infer<typeof ShipmentEventTypeSchema>;
 

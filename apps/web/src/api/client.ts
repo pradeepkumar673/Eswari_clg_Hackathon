@@ -9,8 +9,18 @@ export interface UserProfile {
   id: string;
   username: string;
   display_name: string;
-  role: 'Analyst' | 'Manager' | 'Warehouse_Operator' | 'Procurement_Approver' | 'Administrator';
+  role:
+    | 'Analyst'
+    | 'Manager'
+    | 'Warehouse_Operator'
+    | 'Procurement_Approver'
+    | 'Administrator'
+    | 'DRIVER'
+    | 'SUPPLIER';
   warehouse_id: string | null;
+  driver_id?: string | null;
+  truck_id?: string | null;
+  supplier_id?: string | null;
   permissions: string[];
   demo_mode?: boolean;
 }

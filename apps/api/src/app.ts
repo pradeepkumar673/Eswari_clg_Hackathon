@@ -206,9 +206,9 @@ app.use('/whatif', whatifRouter);
 app.use('/api/v1/admin', adminOpsRouter);
 app.use('/admin', adminOpsRouter);
 
-// Step 19 Foundation Routers
-app.use('/api/v1/tracking', trackingRouter);
-app.use('/tracking', trackingRouter);
+// Step 19 & 21 Tracking, Driver, Reroute & Simulation Routers
+app.use('/api/v1', trackingRouter);
+app.use('/', trackingRouter);
 
 app.use('/api/v1/claims', claimsRouter);
 app.use('/claims', claimsRouter);

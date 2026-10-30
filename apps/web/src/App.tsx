@@ -20,6 +20,8 @@ import { ImpactScreen } from './screens/ImpactScreen.js';
 import { RecoveryScreen } from './screens/RecoveryScreen.js';
 import { ApprovalsScreen } from './screens/ApprovalsScreen.js';
 import { AuditScreen } from './screens/AuditScreen.js';
+import { TrackingScreen } from './screens/TrackingScreen.js';
+import { DriverScreen } from './screens/DriverScreen.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +74,8 @@ export function App() {
             <Route path="/recovery" element={<RecoveryScreen />} />
             <Route path="/approvals" element={<ApprovalsScreen />} />
             <Route path="/audit" element={<AuditScreen />} />
+            <Route path="/tracking" element={<TrackingScreen />} />
+            <Route path="/driver" element={<DriverScreen />} />
             {/* Catch-all redirect to Cockpit */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

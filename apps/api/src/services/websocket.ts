@@ -203,6 +203,19 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
         return;
       }
 
+      if (message.type === 'viewing') {
+        const viewingPayload = {
+          user_id: state.userId,
+          username: state.username,
+          role: state.role,
+          kind: message.kind,
+          id: message.id,
+          ts: new Date().toISOString(),
+        };
+        await broadcastToTopic('presence', viewingPayload);
+        return;
+      }
+
       if (message.type === 'ping') {
         ws.send(JSON.stringify({ type: 'pong' }));
         return;

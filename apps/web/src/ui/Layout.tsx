@@ -44,6 +44,8 @@ import {
   Smartphone,
   CheckCircle2,
   AlertCircle,
+  Navigation,
+  Truck,
 } from 'lucide-react';
 
 const SCREENS = [
@@ -55,6 +57,8 @@ const SCREENS = [
   { path: '/recovery', name: '6. Recovery workbench', icon: CheckCircle, allowedRoles: ['Analyst', 'Manager'] },
   { path: '/approvals', name: '7. Approvals and execution', icon: FileCheck, allowedRoles: ['Manager', 'Procurement_Approver'] },
   { path: '/audit', name: '8. Audit and security', icon: ShieldCheck, allowedRoles: ['Administrator', 'Manager', 'Analyst', 'Procurement_Approver'] },
+  { path: '/tracking', name: '9. Live Driver Map', icon: Navigation, allowedRoles: ['*'] },
+  { path: '/driver', name: '10. Driver Portal', icon: Truck, allowedRoles: ['DRIVER', 'Administrator', 'Manager'] },
 ];
 
 const DEMO_ROLES = [
@@ -63,6 +67,8 @@ const DEMO_ROLES = [
   { role: 'Warehouse_Operator', username: 'operator_blr', label: 'Operator BLR (Karthik)' },
   { role: 'Procurement_Approver', username: 'procurement1', label: 'Procurement (Ananya)' },
   { role: 'Administrator', username: 'admin1', label: 'Admin (Security)' },
+  { role: 'DRIVER', username: 'drv1', label: 'Driver 1 (Ramesh)' },
+  { role: 'SUPPLIER', username: 'sup1', label: 'Supplier 1 (AutoTech)' },
 ];
 
 const ASK_PROMPT_CHIPS = [

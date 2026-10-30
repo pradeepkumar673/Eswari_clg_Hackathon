@@ -29,6 +29,7 @@ _Last updated: 2026-10-30 by Step 18 (Final Audit — Complete)_
 | 18 | Final audit | **STEP 18: PASS (ALL STEPS COMPLETE)** |
 | 19 | Foundation for CCTV, Driver Tracking, Role Dashboards, Leaflet Capacity Mapping | **STEP 19: PASS** |
 | 20 | CCTV Damage Detection, Reconciler Delays, Claims & Evidence Verification | **STEP 20: PASS** |
+| 21 | Live Driver Tracking, Graph Dijkstra, Incident Proposals & Leaflet Map | **STEP 21: PASS** |
 
 ---
 

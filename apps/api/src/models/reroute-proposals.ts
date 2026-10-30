@@ -6,8 +6,9 @@ export interface IRerouteProposal extends Document {
   from_position: Record<string, any>;
   nearest_warehouse_id: string;
   road_km: number;
+  path: string[];
   method: 'ROAD_GRAPH' | 'STRAIGHT_LINE_ESTIMATE';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED_SIMULATED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED_SIMULATED' | 'STALE';
   proposed_by: string;
   created_at: Date;
   decided_by: string | null;
@@ -20,6 +21,7 @@ const rerouteProposalSchema = new Schema<IRerouteProposal>({
   from_position: { type: Schema.Types.Mixed, required: true },
   nearest_warehouse_id: { type: String, required: true },
   road_km: { type: Number, required: true, min: 0 },
+  path: { type: [String], default: [] },
   method: {
     type: String,
     required: true,
@@ -29,7 +31,7 @@ const rerouteProposalSchema = new Schema<IRerouteProposal>({
   status: {
     type: String,
     required: true,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'EXECUTED_SIMULATED'],
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'EXECUTED_SIMULATED', 'STALE'],
     default: 'PENDING',
   },
   proposed_by: { type: String, default: 'system' },

@@ -23,7 +23,7 @@ const ExecutionLedgerSchema = new Schema<IExecutionLedger>(
     action_id: { type: Schema.Types.ObjectId, ref: 'PlanAction', required: false, default: null },
     step_type: {
       type: String,
-      enum: ['RESERVE', 'TRANSFER_START', 'TRANSFER_COMPLETE', 'ROLLBACK', 'INVENTORY_CORRECTION', 'COMPENSATE', 'QUARANTINE'],
+      enum: ['RESERVE', 'TRANSFER_START', 'TRANSFER_COMPLETE', 'ROLLBACK', 'INVENTORY_CORRECTION', 'COMPENSATE', 'QUARANTINE', 'REROUTE_SIMULATED'],
       required: true,
     },
     warehouse_id: { type: Schema.Types.ObjectId, ref: 'Warehouse', required: false, default: null },

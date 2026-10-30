@@ -27,7 +27,7 @@ const ShipmentEventSchema = new Schema<IShipmentEvent>(
     source: {
       type: String,
       required: true,
-      enum: ['CARRIER_API', 'FIELD_REPORT', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT', 'CCTV'],
+      enum: ['CARRIER_API', 'FIELD_REPORT', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT', 'CCTV', 'DRIVER_DEVICE', 'SIM'],
     },
     external_event_id: {
       type: String,
@@ -44,6 +44,7 @@ const ShipmentEventSchema = new Schema<IShipmentEvent>(
         'DAMAGE_REPORT',
         'DELAY_REPORT',
         'INVENTORY_CORRECTION',
+        'ARRIVED_GEOFENCE',
       ],
     },
     reported_eta: {
