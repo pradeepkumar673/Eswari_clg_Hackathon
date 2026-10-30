@@ -209,3 +209,4 @@ export function getPermissionsForRole(role: Role): Capability[] {
     ROLE_PERMISSIONS[cap].roles.includes(role)
   );
 }
+

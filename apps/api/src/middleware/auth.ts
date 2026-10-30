@@ -172,3 +172,4 @@ async function logAccessDenied(
     // Fail silently so audit write error doesn't mask 401/403 response
   }
 }
+

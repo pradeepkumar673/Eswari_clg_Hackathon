@@ -18,3 +18,4 @@ const ChainStateSchema = new Schema<IChainState>(
 );
 
 export const ChainState = mongoose.model<IChainState>('ChainState', ChainStateSchema);
+

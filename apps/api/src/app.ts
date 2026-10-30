@@ -5,6 +5,7 @@ import { checkTransactionsSupported } from './db.js';
 import { authRouter } from './routes/auth.js';
 import { auditRouter, adminTamperRouter } from './routes/audit.js';
 import { webhookRouter } from './routes/webhooks.js';
+import { importsRouter } from './routes/imports.js';
 import { authenticateToken, requirePermission } from './middleware/auth.js';
 import { Capability, ROLE_PERMISSIONS } from '@disruptioniq/shared';
 
@@ -67,6 +68,9 @@ app.use('/admin', adminTamperRouter);
 
 app.use('/api/v1/webhooks', webhookRouter);
 app.use('/webhooks', webhookRouter);
+
+app.use('/api/v1/imports', importsRouter);
+app.use('/imports', importsRouter);
 
 // Capability test router for RBAC verification through real HTTP
 const testPermRouter = express.Router();

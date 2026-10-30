@@ -165,9 +165,18 @@ export async function writeAudit(
 }
 
 export interface WriteLedgerParams {
-  planId: mongoose.Types.ObjectId | string;
-  actionId: mongoose.Types.ObjectId | string;
-  stepType: 'RESERVE' | 'TRANSFER_START' | 'TRANSFER_COMPLETE' | 'ROLLBACK';
+  planId?: mongoose.Types.ObjectId | string | null;
+  actionId?: mongoose.Types.ObjectId | string | null;
+  stepType:
+    | 'RESERVE'
+    | 'TRANSFER_START'
+    | 'TRANSFER_COMPLETE'
+    | 'ROLLBACK'
+    | 'INVENTORY_CORRECTION'
+    | 'COMPENSATE';
+  warehouseId?: mongoose.Types.ObjectId | string | null;
+  skuId?: mongoose.Types.ObjectId | string | null;
+  deltaOnHand?: number | null;
   beforeState: unknown;
   afterState: unknown;
   actor: mongoose.Types.ObjectId | string;
@@ -193,27 +202,42 @@ export async function writeLedgerEntry(
   const seq = state.last_seq;
   const prevHash = state.last_hash || GENESIS_HASH;
 
-  const planId =
-    params.planId instanceof mongoose.Types.ObjectId
+  const planId = params.planId
+    ? params.planId instanceof mongoose.Types.ObjectId
       ? params.planId
-      : new mongoose.Types.ObjectId(params.planId);
-  const actionId =
-    params.actionId instanceof mongoose.Types.ObjectId
+      : new mongoose.Types.ObjectId(params.planId)
+    : null;
+  const actionId = params.actionId
+    ? params.actionId instanceof mongoose.Types.ObjectId
       ? params.actionId
-      : new mongoose.Types.ObjectId(params.actionId);
+      : new mongoose.Types.ObjectId(params.actionId)
+    : null;
   const actorId =
     params.actor instanceof mongoose.Types.ObjectId
       ? params.actor
       : new mongoose.Types.ObjectId(params.actor);
+  const warehouseId = params.warehouseId
+    ? params.warehouseId instanceof mongoose.Types.ObjectId
+      ? params.warehouseId
+      : new mongoose.Types.ObjectId(params.warehouseId)
+    : null;
+  const skuId = params.skuId
+    ? params.skuId instanceof mongoose.Types.ObjectId
+      ? params.skuId
+      : new mongoose.Types.ObjectId(params.skuId)
+    : null;
 
   const rowContent: Record<string, unknown> = {
-    action_id: actionId.toString(),
+    action_id: actionId ? actionId.toString() : null,
     actor: actorId.toString(),
     after_state: params.afterState,
     before_state: params.beforeState,
-    plan_id: planId.toString(),
+    delta_on_hand: params.deltaOnHand ?? null,
+    plan_id: planId ? planId.toString() : null,
     seq,
+    sku_id: skuId ? skuId.toString() : null,
     step_type: params.stepType,
+    warehouse_id: warehouseId ? warehouseId.toString() : null,
   };
 
   const rowHash = computeRowHash(prevHash, rowContent);
@@ -231,12 +255,15 @@ export async function writeLedgerEntry(
         actor: actorId,
         after_state: params.afterState,
         before_state: params.beforeState,
+        delta_on_hand: params.deltaOnHand ?? null,
         executed_at: new Date(),
         plan_id: planId,
         prev_hash: prevHash,
         row_hash: rowHash,
         seq,
+        sku_id: skuId,
         step_type: params.stepType,
+        warehouse_id: warehouseId,
       },
     ],
     { session },
@@ -347,13 +374,16 @@ export async function verifyChain(
       }
 
       const rowContent: Record<string, unknown> = {
-        action_id: row.action_id.toString(),
+        action_id: row.action_id ? row.action_id.toString() : null,
         actor: row.actor.toString(),
         after_state: row.after_state,
         before_state: row.before_state,
-        plan_id: row.plan_id.toString(),
+        delta_on_hand: row.delta_on_hand ?? null,
+        plan_id: row.plan_id ? row.plan_id.toString() : null,
         seq: row.seq,
+        sku_id: row.sku_id ? row.sku_id.toString() : null,
         step_type: row.step_type,
+        warehouse_id: row.warehouse_id ? row.warehouse_id.toString() : null,
       };
 
       const computedHash = computeRowHash(row.prev_hash, rowContent);

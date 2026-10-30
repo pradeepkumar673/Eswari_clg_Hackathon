@@ -75,7 +75,14 @@ export const ImportBatchSchema = z.object({
 });
 export type ImportBatch = z.infer<typeof ImportBatchSchema>;
 
-export const ImportRowStatusSchema = z.enum(['VALID', 'ERROR', 'SKIPPED']);
+export const ImportRowStatusSchema = z.enum([
+  'VALID',
+  'REPAIRED',
+  'QUARANTINED',
+  'DISCARDED',
+  'DUPLICATE',
+  'CONFLICT',
+]);
 export type ImportRowStatus = z.infer<typeof ImportRowStatusSchema>;
 
 export const ImportRowSchema = z.object({
@@ -83,10 +90,13 @@ export const ImportRowSchema = z.object({
   _id: z.string().optional(),
   batch_id: z.string(),
   row_number: z.number().int().positive(),
+  entity_type: z.string().optional(),
+  natural_key: z.string().nullable().optional(),
   raw_data: z.record(z.any()),
+  repaired_data: z.record(z.any()).nullable().optional(),
   status: ImportRowStatusSchema,
   errors: z.array(z.any()).default([]),
-  shipment_event_id: z.string().nullable().optional()
+  shipment_event_id: z.string().nullable().optional(),
 });
 export type ImportRow = z.infer<typeof ImportRowSchema>;
 
