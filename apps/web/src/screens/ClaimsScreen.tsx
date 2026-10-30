@@ -38,12 +38,17 @@ export interface SupplierClaimData {
   _id: string;
   claim_id: string;
   supplier_id: string;
+  supplier_name?: string | null;
+  supplier_code?: string | null;
   shipment_id?: string;
+  shipment_code?: string | null;
   cctv_event_id?: string;
   evidence_id?: string;
+  evidence_ids?: string[];
   evidence_sha256?: string;
   damage_score?: number;
-  damage_band: 'NONE' | 'MINOR' | 'MAJOR' | 'SEVERE';
+  damage_band?: 'NONE' | 'MINOR' | 'MAJOR' | 'SEVERE';
+  band?: 'NONE' | 'MINOR' | 'MAJOR' | 'SEVERE';
   status: 'OPEN' | 'RESPONDED' | 'ACCEPTED' | 'PARTIAL' | 'REJECTED';
   supplier_response?: string;
   decision_notes?: string;
@@ -81,6 +86,9 @@ export function ClaimsScreen() {
   const [verifySuccess, setVerifySuccess] = useState(false);
   const [actualHash, setActualHash] = useState<string | null>(null);
   const [tampering, setTampering] = useState(false);
+  const [expectedHash, setExpectedHash] = useState<string | null>(null);
+  const [evidenceFileOk, setEvidenceFileOk] = useState<boolean | null>(null);
+  const [loadingMeta, setLoadingMeta] = useState<boolean>(false);
 
   const fetchClaims = async () => {
     try {
@@ -115,10 +123,48 @@ export function ClaimsScreen() {
     setDecisionError(null);
   };
 
+  // Fetch real evidence metadata whenever selectedClaim changes
+  useEffect(() => {
+    let active = true;
+    const fetchEvidenceMeta = async () => {
+      if (!selectedClaim) {
+        setExpectedHash(null);
+        setEvidenceFileOk(null);
+        return;
+      }
+      const evidenceId = selectedClaim.evidence_id || selectedClaim.evidence_ids?.[0] || selectedClaim.cctv_event_id;
+      if (!evidenceId) {
+        setExpectedHash(null);
+        setEvidenceFileOk(false);
+        return;
+      }
+      setLoadingMeta(true);
+      try {
+        const meta = await api.evidence.meta(evidenceId);
+        if (active) {
+          setExpectedHash(meta.sha256 || null);
+          setEvidenceFileOk(Boolean(meta.file_exists));
+        }
+      } catch {
+        if (active) {
+          setExpectedHash(selectedClaim.evidence_sha256 || null);
+          setEvidenceFileOk(false);
+        }
+      } finally {
+        if (active) setLoadingMeta(false);
+      }
+    };
+
+    fetchEvidenceMeta();
+    return () => {
+      active = false;
+    };
+  }, [selectedClaim?.claim_id, selectedClaim?._id]);
+
   // In-Browser SHA-256 Cryptographic Verification
   const handleVerifySha256 = async () => {
     if (!selectedClaim) return;
-    const evidenceId = selectedClaim.evidence_id || selectedClaim.cctv_event_id;
+    const evidenceId = selectedClaim.evidence_id || selectedClaim.evidence_ids?.[0] || selectedClaim.cctv_event_id;
     if (!evidenceId) {
       alert('No evidence ID linked to this claim');
       return;
@@ -137,12 +183,11 @@ export function ClaimsScreen() {
       if (!res.ok) {
         // Fallback to server verify route
         const serverVerify = await api.cctv.verifyEvidence(evidenceId);
-        if (serverVerify.match) {
+        setActualHash(serverVerify.actual_sha256);
+        if (serverVerify.match && serverVerify.status === 'VERIFIED') {
           setVerifySuccess(true);
-          setActualHash(serverVerify.actual_sha256);
         } else {
           setTamperDetected(true);
-          setActualHash(serverVerify.actual_sha256);
         }
         return;
       }
@@ -154,8 +199,8 @@ export function ClaimsScreen() {
 
       setActualHash(computedHex);
 
-      const expected = selectedClaim.evidence_sha256;
-      if (expected && computedHex !== expected) {
+      const expected = expectedHash || selectedClaim.evidence_sha256;
+      if (!expected || computedHex !== expected) {
         setTamperDetected(true);
       } else {
         setVerifySuccess(true);
@@ -164,12 +209,11 @@ export function ClaimsScreen() {
       // If direct byte fetch fails, try API verify
       try {
         const serverVerify = await api.cctv.verifyEvidence(evidenceId);
-        if (serverVerify.match) {
+        setActualHash(serverVerify.actual_sha256);
+        if (serverVerify.match && serverVerify.status === 'VERIFIED') {
           setVerifySuccess(true);
-          setActualHash(serverVerify.actual_sha256);
         } else {
           setTamperDetected(true);
-          setActualHash(serverVerify.actual_sha256);
         }
       } catch {
         alert(`Verification failed: ${err.message}`);
@@ -182,7 +226,7 @@ export function ClaimsScreen() {
   // Demo Tamper Helper
   const handleSimulateTamper = async () => {
     if (!selectedClaim) return;
-    const evidenceId = selectedClaim.evidence_id || selectedClaim.cctv_event_id;
+    const evidenceId = selectedClaim.evidence_id || selectedClaim.evidence_ids?.[0] || selectedClaim.cctv_event_id;
     if (!evidenceId) return;
 
     try {
@@ -242,7 +286,7 @@ export function ClaimsScreen() {
         selectedClaim.linked_by === currentUser?.id)
   );
 
-  const getDamageBandChip = (band: string) => {
+  const getDamageBandChip = (band?: string) => {
     switch (band) {
       case 'NONE':
         return <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">NONE</span>;
@@ -253,7 +297,7 @@ export function ClaimsScreen() {
       case 'SEVERE':
         return <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">SEVERE</span>;
       default:
-        return <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">{band}</span>;
+        return <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">{band || 'SEVERE'}</span>;
     }
   };
 
@@ -341,12 +385,12 @@ export function ClaimsScreen() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-900 text-sm">{claim.claim_id}</span>
-                    {getDamageBandChip(claim.damage_band)}
+                    {getDamageBandChip(claim.damage_band || claim.band)}
                   </div>
 
                   <div className="text-xs text-slate-600 mt-1 font-medium">
-                    Supplier: <span className="font-bold text-slate-800">{claim.supplier_id}</span>
-                    {claim.shipment_id && ` • Shipment ${claim.shipment_id}`}
+                    Supplier: <span className="font-bold text-slate-800">{claim.supplier_name || claim.supplier_id}</span>
+                    {(claim.shipment_code || claim.shipment_id) && ` • Shipment ${claim.shipment_code || claim.shipment_id}`}
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
@@ -396,13 +440,13 @@ export function ClaimsScreen() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold text-slate-900">{selectedClaim.claim_id}</h2>
-                      {getDamageBandChip(selectedClaim.damage_band)}
+                      {getDamageBandChip(selectedClaim.damage_band || selectedClaim.band)}
                       <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono">
                         {selectedClaim.status}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
-                      Supplier: <strong className="text-slate-800">{selectedClaim.supplier_id}</strong> | Shipment: <strong className="text-slate-800">{selectedClaim.shipment_id || 'N/A'}</strong>
+                      Supplier: <strong className="text-slate-800">{selectedClaim.supplier_name || selectedClaim.supplier_id}</strong> | Shipment: <strong className="text-slate-800">{selectedClaim.shipment_code || selectedClaim.shipment_id || 'N/A'}</strong>
                     </p>
                   </div>
 
@@ -441,7 +485,7 @@ export function ClaimsScreen() {
                   <div className="relative bg-slate-900 rounded-lg overflow-hidden border border-slate-300 h-64 flex items-center justify-center">
                     {/* Simulated Camera Feed View */}
                     <img
-                      src={`/api/v1/evidence/${selectedClaim.evidence_id || selectedClaim.cctv_event_id}/file`}
+                      src={`/api/v1/evidence/${selectedClaim.evidence_id || selectedClaim.evidence_ids?.[0] || selectedClaim.cctv_event_id}/file`}
                       alt="CCTV Peak Frame"
                       className="w-full h-full object-cover opacity-90"
                       onError={(e: any) => {
@@ -455,25 +499,31 @@ export function ClaimsScreen() {
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="w-48 h-36 border-2 border-rose-500 rounded bg-rose-500/10 flex flex-col justify-between p-1.5 shadow-lg">
                         <div className="bg-rose-600 text-white text-[10px] font-bold px-1 rounded w-fit uppercase">
-                          {selectedClaim.damage_band} CONF: 94.2%
+                          {selectedClaim.damage_band || selectedClaim.band || 'SEVERE'} CONF: 94.2%
                         </div>
                         <div className="text-[10px] text-white/90 font-mono bg-black/60 px-1 rounded w-fit">
-                          SCORE: {selectedClaim.damage_score || 85}/100
+                          SCORE: {selectedClaim.damage_score || 94.5}/100
                         </div>
                       </div>
                     </div>
 
                     <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-0.5 rounded">
-                      CAM-HOS-01 [1080p 30fps]
+                      CAM-CHN-DOCK-01 [1080p 30fps]
                     </div>
                   </div>
                 </div>
 
                 {/* Cryptographic SHA-256 Display */}
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1">
-                  <div className="font-bold text-slate-700">Stored SHA-256 Checksum:</div>
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-slate-700">Stored SHA-256 Checksum:</div>
+                    {loadingMeta && <span className="text-[10px] text-slate-400">Loading checksum…</span>}
+                    {!loadingMeta && evidenceFileOk === false && (
+                      <span className="text-[10px] text-amber-600 font-semibold">Evidence file missing</span>
+                    )}
+                  </div>
                   <div className="font-mono text-slate-600 break-all bg-white p-2 rounded border border-slate-200 text-[11px]">
-                    {selectedClaim.evidence_sha256 || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+                    {expectedHash || (loadingMeta ? 'Loading checksum…' : evidenceFileOk === false ? 'No evidence file is stored for this claim' : 'Unavailable')}
                   </div>
                   {actualHash && (
                     <div className="pt-1">

@@ -11,11 +11,64 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { authenticateToken, requireAnyPermission, requirePermission } from '../middleware/auth.js';
 import { SupplierClaim } from '../models/supplier-claims.js';
 import { CctvEvent } from '../models/cctv-events.js';
+import { Supplier } from '../models/suppliers.js';
+import { Shipment } from '../models/shipments.js';
 
 export const claimsRouter = Router();
+
+async function enrichClaims(claims: any[]): Promise<any[]> {
+  if (!claims.length) return [];
+
+  const supplierKeys = Array.from(new Set(claims.map((c) => c.supplier_id).filter(Boolean)));
+  const shipmentKeys = Array.from(new Set(claims.map((c) => c.shipment_id).filter(Boolean)));
+
+  const supObjectIds = supplierKeys.filter((k) => mongoose.Types.ObjectId.isValid(k));
+  const supCodes = supplierKeys.filter((k) => !mongoose.Types.ObjectId.isValid(k));
+
+  const suppliers = await Supplier.find({
+    $or: [
+      ...(supObjectIds.length ? [{ _id: { $in: supObjectIds } }] : []),
+      ...(supCodes.length ? [{ code: { $in: supCodes } }] : []),
+    ],
+  }).lean();
+
+  const supplierMap = new Map<string, { name: string; code: string }>();
+  for (const s of suppliers) {
+    supplierMap.set(s._id.toString(), { name: s.name, code: s.code });
+    supplierMap.set(s.code, { name: s.name, code: s.code });
+  }
+
+  const shpObjectIds = shipmentKeys.filter((k) => mongoose.Types.ObjectId.isValid(k));
+  const shpCodes = shipmentKeys.filter((k) => !mongoose.Types.ObjectId.isValid(k));
+
+  const shipments = await Shipment.find({
+    $or: [
+      ...(shpObjectIds.length ? [{ _id: { $in: shpObjectIds } }] : []),
+      ...(shpCodes.length ? [{ code: { $in: shpCodes } }] : []),
+    ],
+  }).lean();
+
+  const shipmentMap = new Map<string, string>();
+  for (const sh of shipments) {
+    shipmentMap.set(sh._id.toString(), sh.code);
+    shipmentMap.set(sh.code, sh.code);
+  }
+
+  return claims.map((c) => {
+    const supInfo = c.supplier_id ? supplierMap.get(c.supplier_id.toString()) : null;
+    const shpCode = c.shipment_id ? shipmentMap.get(c.shipment_id.toString()) : null;
+    return {
+      ...c,
+      supplier_name: supInfo ? `${supInfo.name} (${supInfo.code})` : c.supplier_id,
+      supplier_code: supInfo ? supInfo.code : c.supplier_id,
+      shipment_code: shpCode || c.shipment_id,
+    };
+  });
+}
 
 // ---------------------------------------------------------------------------
 // GET /claims — List claims (Supplier sees only own, Operator sees none, Approver sees all)
@@ -45,7 +98,8 @@ claimsRouter.get(
       }
 
       const claims = await SupplierClaim.find(filter).sort({ created_at: -1 }).lean();
-      res.json(claims);
+      const enriched = await enrichClaims(claims);
+      res.json(enriched);
     } catch (e) {
       next(e);
     }
@@ -78,7 +132,8 @@ claimsRouter.get(
         return;
       }
 
-      res.json(claim);
+      const [enriched] = await enrichClaims([claim]);
+      res.json(enriched);
     } catch (e) {
       next(e);
     }

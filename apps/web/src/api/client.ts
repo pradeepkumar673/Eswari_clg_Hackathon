@@ -398,8 +398,15 @@ export const api = {
     getHotspots: (warehouseId?: string) => apiRequest<any[]>(`/cctv/hotspots${warehouseId ? `?warehouse_id=${warehouseId}` : ''}`),
     linkEvent: (eventId: string, shipmentId?: string) =>
       apiRequest<any>(`/cctv/events/${eventId}/link`, { method: 'POST', body: JSON.stringify({ shipment_id: shipmentId }) }),
-    verifyEvidence: (evidenceId: string) => apiRequest<any>(`/evidence/${evidenceId}/verify`),
-    tamperEvidence: (evidenceId: string) => apiRequest<any>(`/evidence/${evidenceId}/tamper`, { method: 'POST' }),
+    getEvidenceMeta: (evidenceId: string) => apiRequest<any>(`/evidence/${encodeURIComponent(evidenceId)}/meta`),
+    verifyEvidence: (evidenceId: string) => apiRequest<any>(`/evidence/${encodeURIComponent(evidenceId)}/verify`),
+    tamperEvidence: (evidenceId: string) => apiRequest<any>(`/evidence/${encodeURIComponent(evidenceId)}/tamper`, { method: 'POST' }),
+  },
+
+  evidence: {
+    meta: (evidenceId: string) => apiRequest<any>(`/evidence/${encodeURIComponent(evidenceId)}/meta`),
+    verify: (evidenceId: string) => apiRequest<any>(`/evidence/${encodeURIComponent(evidenceId)}/verify`),
+    tamper: (evidenceId: string) => apiRequest<any>(`/evidence/${encodeURIComponent(evidenceId)}/tamper`, { method: 'POST' }),
   },
 
   // Live Driver Tracking & Reroutes

@@ -14,7 +14,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { authenticateToken, requirePermission } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { Disruption } from '../models/disruptions.js';
 import { OrderRiskSnapshot } from '../models/order-risk-snapshots.js';
 import { RiskPolicy } from '../models/risk-policies.js';
@@ -27,6 +27,8 @@ import { InventoryBalance } from '../models/inventory-balances.js';
 import { FieldReport } from '../models/field-reports.js';
 import { AuditLog } from '../models/audit-logs.js';
 import { TransferLane } from '../models/transfer-lanes.js';
+import { SupplierClaim } from '../models/supplier-claims.js';
+import { Supplier } from '../models/suppliers.js';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { getBandForScore } from '../services/impactEngine.js';
@@ -224,11 +226,28 @@ riskPolicyRouter.put(
 // Evidence Router (mounted under /evidence)
 export const evidenceRouter = Router();
 
-// GET /evidence/:id/file — Stream evidence file to roles with cctv.view (warehouse-scoped)
+async function supplierOwnsEvidence(user: any, evidenceId: string): Promise<boolean> {
+  if (user?.role?.toUpperCase() !== 'SUPPLIER') return true;
+  const claim = await SupplierClaim.findOne({ evidence_ids: evidenceId }).lean();
+  if (!claim) return false;
+  if (claim.supplier_id === user.supplier_id) return true;
+  if (user.supplier_id) {
+    const isObjectId = mongoose.Types.ObjectId.isValid(user.supplier_id);
+    const supDoc = await Supplier.findOne({
+      $or: [{ code: user.supplier_id }, ...(isObjectId ? [{ _id: user.supplier_id }] : [])],
+    }).lean();
+    if (supDoc && (claim.supplier_id === supDoc._id.toString() || claim.supplier_id === supDoc.code)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// GET /evidence/:id/file — Stream evidence file to roles with cctv.view (warehouse-scoped) or supplier with claim.read.own
 evidenceRouter.get(
   '/:id/file',
   authenticateToken,
-  requirePermission('cctv.view'),
+  requireAnyPermission(['cctv.view', 'claim.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
@@ -237,7 +256,13 @@ evidenceRouter.get(
         return;
       }
 
-      if (req.user?.role === 'Warehouse_Operator' && req.user.warehouse_id) {
+      if (req.user?.role?.toUpperCase() === 'SUPPLIER') {
+        const owns = await supplierOwnsEvidence(req.user, item.evidence_id);
+        if (!owns) {
+          res.status(403).json({ error: 'Forbidden', message: 'Supplier cannot access evidence from other claims' });
+          return;
+        }
+      } else if (req.user?.role === 'Warehouse_Operator' && req.user.warehouse_id) {
         const cctvEvt = await CctvEvent.findOne({ evidence_ids: item.evidence_id }).lean();
         if (cctvEvt) {
           const userWhStr = req.user.warehouse_id.toString();
@@ -260,8 +285,42 @@ evidenceRouter.get(
         return;
       }
 
-      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Content-Type', item.path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
       fs.createReadStream(item.path).pipe(res);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// GET /evidence/:id/meta — Metadata for an evidence item (sha256, exists, kind)
+evidenceRouter.get(
+  '/:id/meta',
+  authenticateToken,
+  requireAnyPermission(['cctv.view', 'claim.read.own']),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
+      if (!item) {
+        res.status(404).json({ error: 'Not Found', message: `Evidence item ${req.params.id} not found` });
+        return;
+      }
+
+      if (req.user?.role?.toUpperCase() === 'SUPPLIER') {
+        const owns = await supplierOwnsEvidence(req.user, item.evidence_id);
+        if (!owns) {
+          res.status(403).json({ error: 'Forbidden', message: 'Supplier cannot access evidence from other claims' });
+          return;
+        }
+      }
+
+      res.json({
+        evidence_id: item.evidence_id,
+        kind: item.kind,
+        sha256: item.sha256,
+        file_exists: fs.existsSync(item.path),
+        created_at: item.created_at,
+      });
     } catch (e) {
       next(e);
     }
@@ -272,13 +331,21 @@ evidenceRouter.get(
 evidenceRouter.get(
   '/:id/verify',
   authenticateToken,
-  requirePermission('cctv.view'),
+  requireAnyPermission(['cctv.view', 'claim.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
       if (!item) {
         res.status(404).json({ error: 'Not Found', message: `Evidence item ${req.params.id} not found` });
         return;
+      }
+
+      if (req.user?.role?.toUpperCase() === 'SUPPLIER') {
+        const owns = await supplierOwnsEvidence(req.user, item.evidence_id);
+        if (!owns) {
+          res.status(403).json({ error: 'Forbidden', message: 'Supplier cannot access evidence from other claims' });
+          return;
+        }
       }
 
       if (!fs.existsSync(item.path)) {

@@ -18,6 +18,11 @@
  */
 
 import mongoose from 'mongoose';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { config } from '../config.js';
+import { makeDamageFrame } from './pngFrame.js';
 import { Shipment } from '../models/shipments.js';
 import { User } from '../models/users.js';
 import { Zone } from '../models/zones.js';
@@ -90,12 +95,20 @@ export async function runScenarioC(): Promise<ScenarioCResult> {
   const clipId = `CLIP-SC-CHN-${Date.now().toString(36)}`;
   const eventId = `EVT-SC-CHN-${Date.now().toString(36)}`;
 
+  // Generate real damage frame PNG and persist evidence file
+  const evidenceDir = path.resolve(config.CCTV_EVIDENCE_DIR);
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const framePng = makeDamageFrame();
+  const framePath = path.join(evidenceDir, `${eventId}.png`);
+  fs.writeFileSync(framePath, framePng);
+  const frameSha256 = crypto.createHash('sha256').update(framePng).digest('hex');
+
   // Create clip & event
   const clip = await CctvClip.create({
     clip_id: clipId,
     warehouse_id: 'WH-CHN',
     camera_id: 'CAM-CHN-DOCK-01',
-    sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    sha256: frameSha256,
     frame_count: 150,
     fps: 15,
     created_at: now,
@@ -113,10 +126,19 @@ export async function runScenarioC(): Promise<ScenarioCResult> {
     units_damaged: 5,
     frame_start: 20,
     frame_end: 70,
-    evidence_ids: [],
+    evidence_ids: [eventId],
     status: 'LINKED',
     linked_by: operatorUser._id.toString(),
     linked_at: now,
+    created_at: now,
+  });
+
+  // Store evidence item
+  await EvidenceItem.create({
+    evidence_id: eventId,
+    kind: 'FRAME_SNAPSHOT',
+    path: framePath,
+    sha256: frameSha256,
     created_at: now,
   });
 
@@ -150,6 +172,7 @@ export async function runScenarioC(): Promise<ScenarioCResult> {
     units: 5,
     delay_hours: 48,
     status: 'OPEN',
+    evidence_ids: [eventId],
     linked_by: operatorUser._id.toString(),
     created_at: now,
   });
