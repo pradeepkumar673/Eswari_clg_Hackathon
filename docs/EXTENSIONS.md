@@ -4,72 +4,41 @@ _Authoritative Extension Integration Guide — Updated 2026-10-30_
 
 ---
 
-## Overview
+## 1. Impeccable (Installed & Active)
 
-The 4 core project extensions (**CodeRabbit**, **Impeccable**, **GSD Mission Control**, and **Ponytail**) are active in our workspace environment. In accordance with `docs/RULES.md` and the Step Close Routine, they are directly executed and integrated into every step workflow as specified below:
+**Location:** `.agent/skills/impeccable/`  
+**CLI Engine:** `.agent/skills/impeccable/scripts/bin/windows-x64/impeccable.exe`  
+**Capabilities:**
+- `impeccable detect [file-or-dir-or-url...]`: Scans for UI anti-patterns, design quality issues, and visual regressions.
+- Antigravity Skill integration: Full skill suite with reference guides for audit, polish, clarify, distill, layout, and contrast.
 
----
-
-## 1. CodeRabbit (Automated Code Review & Diff Audit)
-
-**Role:** High-rigour pre-commit code review engine checking for:
-- Security vulnerabilities (injection, auth bypasses, leaked secrets)
-- Concurrency & race condition risks (Mongo transaction boundaries, lock order)
-- Error handling integrity (no unhandled rejections, typed error responses)
-- Strict compliance with append-only rules (`shipment_events`, `audit_logs`, `execution_ledger`)
-
-**Our Routine in Every Step:**
-1. At Step Close, run CodeRabbit review on the working diff (`git diff HEAD`).
-2. Triage every finding:
-   - Actionable findings: Fixed immediately before commit.
-   - Non-actionable or intentional deviations: Logged explicitly with reasoning in the commit message trailer (`Review: ...`).
+**Our Step Routine:**
+1. **Design-Brief Setup (Step 5):** Run Impeccable init/brief routine and create `docs/DESIGN.md`.
+2. **Frontend Build (Steps 5, 22–26):** Execute UI design against the established design brief.
+3. **Impeccable Audit Pass:** Run `& ".agent/skills/impeccable/scripts/bin/windows-x64/impeccable.exe" detect apps/web` before closing every UI step and fix all findings.
 
 ---
 
-## 2. Impeccable (Craft, Design Brief & UI Critique)
+## 2. CodeRabbit (Installed & Active via npx)
 
-**Role:** Production-grade frontend craft and UI audit engine ensuring clean, calm, high-density operations UI.
+**CLI:** `npx coderabbit review`  
+**Capabilities:**
+- Reviews working uncommitted diffs for security, race conditions, error handling gaps, and typing.
+- Generates structured findings for agent triage (`--agent`).
 
-**Our Routine:**
-1. **Design-Brief Setup (Step 5):** Establishes the authoritative design brief in `docs/DESIGN.md` (calm control tower, INR currency formatting `₹`, Asia/Kolkata timestamps, WCAG AA compliance, dark/light theme).
-2. **Component Craft (Steps 5, 22–26):** Builds UI components using clean token hierarchies and strict empty/loading/error state patterns.
-3. **Impeccable Polish Pass (before closing any UI step):**
-   - Color contrast checks (WCAG AA).
-   - Visible keyboard navigation focus rings.
-   - Layout responsiveness across desktop and mobile (390 px).
-   - Zero hardcoded numbers or strings (verified via `scan:placeholders`).
+**Our Step Routine:**
+- At every Step Close Routine: execute `npx coderabbit review` on the working changes, resolve actionable items, and log any intentional exclusions in the commit message.
 
 ---
 
-## 3. GSD Mission Control (Step Task & Milestone Engine)
+## 3. GSD Mission Control (Active)
 
 **Role:** Systematic milestone tracking, sub-task execution control, and blocker management.
-
-**Our Routine in Every Step:**
-1. **Step Inception:** Establish a dedicated mission for the step in `docs/STATE.md` with explicit task checklists mirroring the step prompt.
-2. **Active Execution:** Mark sub-tasks done `[x]` as they complete.
-3. **Step Close:**
-   - Verify that all mission criteria are satisfied.
-   - Ensure `KNOWN ISSUES` is completely empty.
-   - Update `docs/STATE.md` with `STEP N: PASS` and initialize tasks for Step N+1.
+**Routine:** Every step establishes a checklist in `docs/STATE.md`, tracks sub-tasks, ensures `KNOWN ISSUES` is clean, and marks `STEP N: PASS` upon verification.
 
 ---
 
-## 4. Ponytail (Step Execution Workflow Accelerator)
+## 4. StitchMCP (Installed & Active)
 
-**Role:** Workflow automation engine handling repetitive step scaffolding, test pipeline chaining, environment checks, and workspace hygiene.
-
-**Our Routine in Every Step:**
-1. Automates the transition between steps (validating prerequisite step status).
-2. Runs the multi-suite verification pipeline (`npm run test`, `npm run scan:placeholders`, and service health checks).
-3. Maintains file integrity and directory structure across step executions.
-
----
-
-## 5. StitchMCP (UI Layouts & Design Tokens)
-
-**Role:** Integrated design system and screen layout scaffolding MCP server.
-
-**Our Routine:**
-- Generates wireframes and component variants for complex dashboard views in Steps 22–26.
-- All StitchMCP layouts are immediately wired to live backend API contracts with zero placeholder data.
+**Role:** Design system generation and UI screen scaffolding MCP server.
+**Routine:** Used for generating and refining UI layouts in Steps 22–26, connecting them directly to live API data.
