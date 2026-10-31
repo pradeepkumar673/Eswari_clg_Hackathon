@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from services.vision.synthesizer import synthesize_clip
 from services.vision.analyzer import analyze_clip
+from services.vision.cctv_frame_generator import generate_cctv_damage_evidence
 
 app = FastAPI(
     title="Antigravity CCTV Damage Vision Service",
@@ -53,6 +54,17 @@ class AnalyzeRequest(BaseModel):
     camera_id: Optional[str] = "CAM-01"
     evidence_dir: Optional[str] = None
     model_weights_path: Optional[str] = None
+
+
+class GenerateEvidenceRequest(BaseModel):
+    output_path: Optional[str] = None
+    warehouse_id: Optional[str] = "WH-CHN"
+    camera_id: Optional[str] = "CAM-CHN-DOCK-01"
+    shipment_code: Optional[str] = "SHP-310"
+    event_id: Optional[str] = "EVT-SC-CHN-001"
+    damage_band: Optional[str] = "SEVERE"
+    timestamp_str: Optional[str] = "2026-10-30 14:22:18 IST"
+    carrier_name: Optional[str] = "HORIZON ELECTRONICS"
 
 
 @app.get("/health")
@@ -95,6 +107,25 @@ def analyze(req: AnalyzeRequest):
         return result
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate-evidence")
+def generate_evidence(req: GenerateEvidenceRequest):
+    try:
+        out_path = req.output_path or os.path.join(DEFAULT_EVIDENCE_DIR, f"{req.event_id}.jpg")
+        result = generate_cctv_damage_evidence(
+            output_path=out_path,
+            warehouse_id=req.warehouse_id or "WH-CHN",
+            camera_id=req.camera_id or "CAM-CHN-DOCK-01",
+            shipment_code=req.shipment_code or "SHP-310",
+            event_id=req.event_id or "EVT-SC-CHN-001",
+            damage_band=req.damage_band or "SEVERE",
+            timestamp_str=req.timestamp_str or "2026-10-30 14:22:18 IST",
+            carrier_name=req.carrier_name or "HORIZON ELECTRONICS"
+        )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

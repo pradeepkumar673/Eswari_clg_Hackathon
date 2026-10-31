@@ -48,13 +48,19 @@ export async function authenticateToken(
   next: NextFunction,
 ): Promise<void> {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token: string | undefined;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (typeof req.query.token === 'string' && req.query.token.trim()) {
+    token = req.query.token.trim();
+  }
+
+  if (!token) {
     await logAccessDenied(req, 'Missing or malformed Authorization header');
     res.status(401).json({ error: 'Unauthorized', message: 'Authentication required' });
     return;
   }
-
-  const token = authHeader.split(' ')[1];
   try {
     const payload = jwt.verify(token, config.JWT_SECRET) as {
       sub: string;

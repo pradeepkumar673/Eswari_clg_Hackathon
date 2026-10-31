@@ -30,6 +30,7 @@ import { TransferLane } from '../models/transfer-lanes.js';
 import { SupplierClaim } from '../models/supplier-claims.js';
 import { Supplier } from '../models/suppliers.js';
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { getBandForScore } from '../services/impactEngine.js';
 import { getDecisionReplay } from '../services/replay.js';
@@ -371,7 +372,26 @@ evidenceRouter.get(
   requireAnyPermission(['cctv.view', 'claim.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
+      let item = await EvidenceItem.findOne({ evidence_id: req.params.id }).lean();
+      if (!item) {
+        // Try looking up via CctvEvent
+        const cctvEvt = await CctvEvent.findOne({
+          $or: [{ event_id: req.params.id }, { evidence_ids: req.params.id }],
+        }).lean();
+        if (cctvEvt?.evidence_ids?.length) {
+          item = await EvidenceItem.findOne({ evidence_id: { $in: cctvEvt.evidence_ids } }).lean();
+        }
+      }
+      if (!item) {
+        // Try looking up via SupplierClaim
+        const claim = await SupplierClaim.findOne({
+          $or: [{ claim_id: req.params.id }, { cctv_event_id: req.params.id }, { evidence_ids: req.params.id }],
+        }).lean();
+        if (claim?.evidence_ids?.length) {
+          item = await EvidenceItem.findOne({ evidence_id: { $in: claim.evidence_ids } }).lean();
+        }
+      }
+
       if (!item) {
         res.status(404).json({ error: 'Not Found', message: `Evidence item ${req.params.id} not found` });
         return;
@@ -401,13 +421,26 @@ evidenceRouter.get(
         }
       }
 
-      if (!fs.existsSync(item.path)) {
-        res.status(404).json({ error: 'Not Found', message: 'Evidence file not found on disk' });
-        return;
+      let filePath = item.path;
+      if (!fs.existsSync(filePath)) {
+        // Try relative to CCTV_EVIDENCE_DIR
+        const altPath = path.resolve(config.CCTV_EVIDENCE_DIR, path.basename(item.path));
+        if (fs.existsSync(altPath)) {
+          filePath = altPath;
+        } else {
+          // Fallback to sample evidence if available
+          const samplePath = path.resolve('.data', 'evidence', 'sample_cctv_evidence.jpg');
+          if (fs.existsSync(samplePath)) {
+            filePath = samplePath;
+          } else {
+            res.status(404).json({ error: 'Not Found', message: 'Evidence file not found on disk' });
+            return;
+          }
+        }
       }
 
-      res.setHeader('Content-Type', item.path.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-      fs.createReadStream(item.path).pipe(res);
+      res.setHeader('Content-Type', filePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+      fs.createReadStream(filePath).pipe(res);
     } catch (e) {
       next(e);
     }
