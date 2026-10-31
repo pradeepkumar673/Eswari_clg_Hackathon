@@ -286,6 +286,35 @@ plansRouter.post(
 );
 
 // ---------------------------------------------------------------------------
+// GET /disruptions/:id/recovery-plans/latest
+// Newest plan for a disruption, or plan_id: null if none has been generated.
+// ---------------------------------------------------------------------------
+plansRouter.get(
+  '/disruptions/:id/recovery-plans/latest',
+  authenticateToken,
+  requirePermission('manage_plans'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!isObjectId(id)) { err(res, 400, 'BAD_ID', 'Invalid disruption id'); return; }
+
+      const plan: any = await RecoveryPlan.findOne({ disruption_id: id })
+        .sort({ version: -1 })
+        .select('_id version status')
+        .lean();
+
+      res.status(200).json({
+        plan_id: plan ? String(plan._id) : null,
+        version: plan?.version ?? null,
+        status: plan?.status ?? null,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // GET /plans/:id
 // ---------------------------------------------------------------------------
 plansRouter.get(

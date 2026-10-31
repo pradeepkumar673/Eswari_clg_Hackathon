@@ -249,6 +249,15 @@ describe('A5 – Recovery Plan Generation', () => {
       .set(auth(analystToken));
     expect(res.status).toBe(200);
   });
+
+  it('fetches latest recovery plan for disruption', async () => {
+    if (!disruptionId) return;
+    const res = await request(app)
+      .get(`${BASE}/disruptions/${disruptionId}/recovery-plans/latest`)
+      .set(auth(analystToken));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('plan_id');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
