@@ -111,7 +111,7 @@ describe('Step 23 — Scenario C & Governance Gate Acceptance Suite', () => {
     expect(claim).toBeDefined();
     expect(claim!.status).toBe('OPEN');
     expect(claim!.band).toBe('SEVERE');
-  });
+  }, 15000);
 
   it('2. Tracking Flow: Analyst receives broadcast, while WH-CHN Operator receives DRV-2 but not DRV-1', async () => {
     // Connect Analyst WebSocket

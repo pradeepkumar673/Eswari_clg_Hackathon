@@ -71,6 +71,9 @@ const DEMO_ROLES = [
   { role: 'Procurement_Approver', username: 'procurement1', label: 'Procurement (Ananya)' },
   { role: 'Administrator', username: 'admin1', label: 'Admin (Security)' },
   { role: 'DRIVER', username: 'drv1', label: 'Driver 1 (Ramesh)' },
+  { role: 'DRIVER', username: 'drv2', label: 'Driver 2 (Karthik)' },
+  { role: 'DRIVER', username: 'drv3', label: 'Driver 3 (Murugan)' },
+  { role: 'DRIVER', username: 'drv4', label: 'Driver 4 (Anand)' },
   { role: 'SUPPLIER', username: 'sup1', label: 'Supplier 1 (AutoTech)' },
 ];
 

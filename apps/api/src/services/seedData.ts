@@ -543,6 +543,8 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
     // Step 19 Users
     { username: 'drv1', display_name: 'Driver 1 (Ramesh)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-1', truck_id: 'SHP-204', supplier_id: null },
     { username: 'drv2', display_name: 'Driver 2 (Karthik)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-2', truck_id: 'SHP-310', supplier_id: null },
+    { username: 'drv3', display_name: 'Driver 3 (Murugan)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-3', truck_id: 'SHP-212', supplier_id: null },
+    { username: 'drv4', display_name: 'Driver 4 (Anand)', role: 'DRIVER' as const, warehouse_id: null, driver_id: 'DRV-4', truck_id: 'SHP-311', supplier_id: null },
     { username: 'sup1', display_name: 'Supplier Rep 1 (Apex)', role: 'SUPPLIER' as const, warehouse_id: null, driver_id: null, truck_id: null, supplier_id: 'SUP-1' },
   ];
 
@@ -561,7 +563,7 @@ export async function seed(targetUri?: string, disconnectAfter = true): Promise<
       display_name: u.display_name,
     });
   }
-  console.log('[seed] Users: 10 users (1 Analyst, 2 Managers, 1 Operator, 2 Procurement, 1 Admin, 2 DRIVER, 1 SUPPLIER)');
+  console.log('[seed] Users: 12 users (1 Analyst, 2 Managers, 1 Operator, 2 Procurement, 1 Admin, 4 DRIVER, 1 SUPPLIER)');
 
   // ── 11. SourceTrust ───────────────────────────────────────────────────────
   const validSources = ['FIELD_REPORT', 'CARRIER_API', 'SUPPLIER_PORTAL', 'CSV', 'EMAIL_TEXT'];
