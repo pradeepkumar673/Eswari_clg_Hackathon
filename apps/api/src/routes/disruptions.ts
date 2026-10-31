@@ -439,8 +439,134 @@ evidenceRouter.get(
         }
       }
 
-      res.setHeader('Content-Type', filePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+      const isVideo = filePath.toLowerCase().endsWith('.mp4');
+      const stat = fs.statSync(filePath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      if (isVideo && range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = end - start + 1;
+        const file = fs.createReadStream(filePath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': 'video/mp4',
+        };
+        res.writeHead(206, head);
+        file.pipe(res);
+        return;
+      }
+
+      res.setHeader('Content-Type', isVideo ? 'video/mp4' : (filePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'));
+      res.setHeader('Content-Length', fileSize);
       fs.createReadStream(filePath).pipe(res);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// GET /evidence/video — Stream the uploaded warehouse CCTV video directly
+evidenceRouter.get(
+  '/video',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const candidatePaths = [
+        'D:\\Downloads\\073623.mp4\\073623.mp4',
+        path.resolve('apps', 'web', 'public', 'cctv', '073623.mp4'),
+        path.resolve('apps', 'web', 'public', 'cctv', 'warehouse-cctv.mp4'),
+        path.resolve('.data', 'evidence', '073623.mp4'),
+        path.resolve('.data', 'cctv', 'clips', '073623.mp4'),
+      ];
+
+      const videoPath = candidatePaths.find((p) => fs.existsSync(p));
+      if (!videoPath) {
+        res.status(404).json({ error: 'Not Found', message: 'Warehouse video 073623.mp4 not found' });
+        return;
+      }
+
+      const stat = fs.statSync(videoPath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = end - start + 1;
+        const file = fs.createReadStream(videoPath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': 'video/mp4',
+        };
+        res.writeHead(206, head);
+        file.pipe(res);
+      } else {
+        const head = {
+          'Content-Length': fileSize,
+          'Content-Type': 'video/mp4',
+          'Accept-Ranges': 'bytes',
+        };
+        res.writeHead(200, head);
+        fs.createReadStream(videoPath).pipe(res);
+      }
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// GET /evidence/:id/video — Stream warehouse video for a specific claim/evidence
+evidenceRouter.get(
+  '/:id/video',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const candidatePaths = [
+        path.resolve('.data', 'evidence', `${req.params.id}.mp4`),
+        'D:\\Downloads\\073623.mp4\\073623.mp4',
+        path.resolve('apps', 'web', 'public', 'cctv', '073623.mp4'),
+        path.resolve('.data', 'evidence', '073623.mp4'),
+      ];
+
+      const videoPath = candidatePaths.find((p) => fs.existsSync(p));
+      if (!videoPath) {
+        res.status(404).json({ error: 'Not Found', message: 'Video not found' });
+        return;
+      }
+
+      const stat = fs.statSync(videoPath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = end - start + 1;
+        const file = fs.createReadStream(videoPath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': 'video/mp4',
+        };
+        res.writeHead(206, head);
+        file.pipe(res);
+      } else {
+        const head = {
+          'Content-Length': fileSize,
+          'Content-Type': 'video/mp4',
+          'Accept-Ranges': 'bytes',
+        };
+        res.writeHead(200, head);
+        fs.createReadStream(videoPath).pipe(res);
+      }
     } catch (e) {
       next(e);
     }
