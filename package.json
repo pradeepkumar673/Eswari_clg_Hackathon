@@ -29,7 +29,8 @@
     "demo:reset": "npx tsx scripts/reset.ts",
     "demo:warm": "npx tsx scripts/demo-warm.ts",
     "metrics": "npx tsx scripts/metrics.ts",
-    "acceptance": "vitest run apps/api/test/step16-acceptance.test.ts"
+    "acceptance": "vitest run apps/api/test/step16-acceptance.test.ts",
+    "ml:train": "python services/ml/simulate_history.py && python services/ml/train.py"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

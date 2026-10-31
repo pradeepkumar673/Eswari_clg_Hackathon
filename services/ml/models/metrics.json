@@ -1,0 +1,26 @@
+{
+  "C1_breach_classifier": {
+    "algorithm": "LogisticRegression",
+    "test_accuracy": 0.7333,
+    "test_f1": 0.8253,
+    "cv5_accuracy_mean": 0.7313
+  },
+  "C2_risk_band_classifier": {
+    "algorithm": "RandomForestClassifier",
+    "test_accuracy": 0.625,
+    "test_macro_f1": 0.4145,
+    "cv5_accuracy_mean": 0.6323
+  },
+  "R1_delay_regressor": {
+    "algorithm": "GradientBoostingRegressor",
+    "test_mae_hours": 2.985,
+    "test_r2": 0.1906,
+    "cv5_r2_mean": 0.2093
+  },
+  "R2_penalty_regressor": {
+    "algorithm": "Ridge (target = log1p INR)",
+    "test_mae_log": 1.6237,
+    "test_r2": 0.2115,
+    "cv5_r2_mean": 0.195
+  }
+}
