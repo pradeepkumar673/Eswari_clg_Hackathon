@@ -5,11 +5,12 @@
  * Called via `npm run demo:warm`.
  */
 import 'dotenv/config';
-import { connectDb, disconnectDb } from '../apps/api/src/db.js';
+import mongoose from 'mongoose';
+import { connectDB } from '../apps/api/src/db.js';
 import { callStructuredLLM } from '../apps/api/src/llm/provider.js';
 
 async function main() {
-  await connectDb();
+  await connectDB();
   console.log('[demo:warm] Database connected.');
 
   const apiKey = process.env.GROQ_API_KEY;
@@ -17,7 +18,7 @@ async function main() {
     console.log('[demo:warm] GROQ_API_KEY not set.');
     console.log('[demo:warm] Deterministic rule-based fallback is 100% active and verified.');
     console.log('[demo:warm] Extractor Tanglish rules, LP solver, and decision contracts require no external API.');
-    await disconnectDb();
+    await mongoose.disconnect();
     process.exit(0);
   }
 
@@ -34,14 +35,14 @@ async function main() {
     console.log('[demo:warm] Continuing with deterministic rule-based fallback.');
   }
 
-  await disconnectDb();
+  await mongoose.disconnect();
   console.log('[demo:warm] Demo warmup complete.');
   process.exit(0);
 }
 
 main().catch(async (err) => {
   console.error('[demo:warm] Error:', err);
-  await disconnectDb();
+  await mongoose.disconnect().catch(() => {});
   process.exit(1);
 });
 
