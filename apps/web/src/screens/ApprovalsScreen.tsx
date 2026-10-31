@@ -1,378 +1,253 @@
 /**
  * apps/web/src/screens/ApprovalsScreen.tsx
  *
- * Screen 7: Approvals and Execution (Bright Executive Theme)
- * Purpose: Act & Govern
- * Features:
- * - Pending approvals queue with dual-role threshold indicator (> INR 5,000 threshold requires Manager + Procurement)
- * - Approve, Reject, and Request Changes actions with notes
- * - Delegation panel: list active delegations, create delegation, revoke delegation
- * - 4-step execution tracker:
- *     1. Ledger reservation commitment
- *     2. PO issuance to qualified alternative supplier
- *     3. Carrier dispatch booking
- *     4. Customer SLA notice broadcast
- * - Execute Plan and Rollback Plan actions with before/after state diff
- * - Customer notices panel with release action
+ * Approvals and execution on real plans only.
+ *  - Queue from GET /approvals/queue (unwrapped from { queue })
+ *  - Plan review and sign-offs from GET /approvals/plans/:id/review
+ *  - Approve, reject, request changes, execute, rollback on /plans/:id/*
+ *  - Delegations and customer notices from their real endpoints
+ * Nothing is faked. If the backend refuses an action, its message is shown.
  */
 
-import { useState, useEffect } from 'react';
-import {
-  FileCheck,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Send,
-  RotateCcw,
-  UserCheck,
-  Plus,
-  Play,
-  ArrowRight,
-  ShieldAlert,
-} from 'lucide-react';
-import { api, getStoredUser } from '../api/client.js';
-import {
-  Button,
-  MoneyText,
-  TimeText,
-  StatusChip,
-  Dialog,
-  Skeleton,
-  EmptyState,
-} from '../ui/components.js';
+import { useCallback, useEffect, useState } from 'react';
+import { api, apiRequest, getStoredUser } from '../api/client.js';
 
-interface ApprovalItem {
-  _id: string;
-  plan_code?: string;
-  disruption_id: string;
-  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'EXECUTED' | 'REJECTED';
-  version: number;
-  total_cost: number;
-  baseline_value: number;
-  objective_value: number;
-  net_savings: number;
-  required_roles: string[];
-  approvals_completed: string[];
-  created_at: string;
-  scope_description: string;
-  actions_count?: number;
-}
+type Tab = 'queue' | 'delegations' | 'notices';
+type Msg = { text: string; type: 'success' | 'error' } | null;
 
-interface DelegationItem {
-  _id: string;
-  delegator_id: string;
-  delegator_name: string;
-  delegatee_id: string;
-  delegatee_name: string;
-  role: string;
-  reason: string;
-  expires_at: string;
-  status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
-}
+const APPROVER_ROLES = ['Manager', 'Procurement_Approver'];
 
-interface CustomerNotice {
-  _id: string;
-  plan_id: string;
-  order_id: string;
-  order_code: string;
-  customer_name: string;
-  original_due_date: string;
-  new_promise_date: string;
-  status: 'DRAFT' | 'RELEASED';
-  channel: string;
-  subject: string;
-  body: string;
+const inr = (n: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+
+const when = (d?: string | null) =>
+  d
+    ? new Date(d).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : '—';
+
+/** Date to the "YYYY-MM-DDTHH:mm" value a datetime-local input needs, in local time. */
+const toLocalInput = (d: Date) => {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
+const errText = (e: any) => e?.message || 'Request failed';
+
+const post = (path: string, body: unknown) =>
+  apiRequest<any>(path, { method: 'POST', body: JSON.stringify(body) });
+
+const STATUS_CLS: Record<string, string> = {
+  PENDING_APPROVAL: 'bg-amber-100 text-amber-800 border-amber-300',
+  SUBMITTED: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+  APPROVED: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  EXECUTED: 'bg-sky-100 text-sky-800 border-sky-300',
+  REJECTED: 'bg-rose-100 text-rose-800 border-rose-300',
+  BLOCKED: 'bg-rose-100 text-rose-800 border-rose-300',
+  DRAFT: 'bg-slate-100 text-slate-700 border-slate-300',
+};
+
+function Badge({ text, cls }: { text: string; cls?: string }) {
+  return (
+    <span
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cls ?? 'bg-slate-100 text-slate-700 border-slate-300'}`}
+    >
+      {String(text).replace(/_/g, ' ')}
+    </span>
+  );
 }
 
 export function ApprovalsScreen() {
-  const [activeTab, setActiveTab] = useState<'queue' | 'delegations' | 'notices'>('queue');
-  const [queue, setQueue] = useState<ApprovalItem[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<ApprovalItem | null>(null);
-  const [delegations, setDelegations] = useState<DelegationItem[]>([]);
-  const [notices, setNotices] = useState<CustomerNotice[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [actionLoading, setActionLoading] = useState<boolean>(false);
-  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const me = getStoredUser();
+  const canApprove = !!me && APPROVER_ROLES.includes(me.role);
+  const isManager = me?.role === 'Manager';
 
-  // Modals
-  const [actionModal, setActionModal] = useState<'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | null>(null);
-  const [actionNotes, setActionNotes] = useState<string>('');
-  const [newDelegationOpen, setNewDelegationOpen] = useState<boolean>(false);
-  const [newDelegationForm, setNewDelegationForm] = useState({
-    delegatee_id: 'procurement1',
+  const [tab, setTab] = useState<Tab>('queue');
+  const [queue, setQueue] = useState<any[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [detail, setDetail] = useState<any>(null);
+  const [delegations, setDelegations] = useState<any[]>([]);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [sideError, setSideError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<boolean>(false);
+  const [msg, setMsg] = useState<Msg>(null);
+
+  const [note, setNote] = useState<string>('');
+  const [ackBreach, setAckBreach] = useState<boolean>(false);
+  const [execResult, setExecResult] = useState<any>(null);
+
+  const [newDel, setNewDel] = useState({
+    delegate_id: '',
     role: 'Procurement_Approver',
-    reason: 'Emergency coverage during medical cold-chain disruption',
-    expires_at: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 16),
+    reason: '',
+    valid_until: toLocalInput(new Date(Date.now() + 2 * 86400000)),
   });
 
-  // Execution stepper state
-  const [executionPhase, setExecutionPhase] = useState<number>(0);
-  const [executing, setExecuting] = useState<boolean>(false);
-  const [executionDiff, setExecutionDiff] = useState<any>(null);
-
-  const currentUser = getStoredUser();
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [queueRes, delRes, notRes] = await Promise.all([
-        api.approvals.getQueue().catch(() => []),
-        api.approvals.getDelegations().catch(() => []),
-        api.approvals.getNotices().catch(() => []),
-      ]);
-
-      if (Array.isArray(queueRes) && queueRes.length > 0) {
-        setQueue(queueRes);
-        setSelectedPlan(queueRes[0]);
-      } else {
-        // Fallback calibrated Scenario A plan in queue
-        const synPlan: ApprovalItem = {
-          _id: 'PLN-SCENARIO-A-VERIFIED',
-          plan_code: 'PLN-2026-0042',
-          disruption_id: 'DSR-9021',
-          status: 'SUBMITTED',
-          version: 1,
-          total_cost: 6825,
-          baseline_value: 16000,
-          objective_value: 6825,
-          net_savings: 9175,
-          required_roles: ['Manager', 'Procurement_Approver'],
-          approvals_completed: [],
-          created_at: new Date().toISOString(),
-          scope_description: 'portfolio-level constrained optimisation (Scenario A: NH-48 Road Expedite + MedSupply)',
-          actions_count: 3,
-        };
-        setQueue([synPlan]);
-        setSelectedPlan(synPlan);
-      }
-
-      if (Array.isArray(delRes) && delRes.length > 0) {
-        setDelegations(delRes);
-      } else {
-        setDelegations([
-          {
-            _id: 'DEL-101',
-            delegator_id: 'manager1',
-            delegator_name: 'Rajesh Krishnamurthy (Manager)',
-            delegatee_id: 'procurement1',
-            delegatee_name: 'Ananya Sharma (Procurement)',
-            role: 'Procurement_Approver',
-            reason: 'High-value emergency bypass authorization under Section 4.2',
-            expires_at: '2026-11-02T18:00:00Z',
-            status: 'ACTIVE',
-          },
-        ]);
-      }
-
-      if (Array.isArray(notRes) && notRes.length > 0) {
-        setNotices(notRes);
-      } else {
-        setNotices([
-          {
-            _id: 'NOT-1042',
-            plan_id: 'PLN-SCENARIO-A-VERIFIED',
-            order_id: 'ORD-1042',
-            order_code: 'ORD-1042 (Apollo Greams)',
-            customer_name: 'Apollo Hospitals Chennai',
-            original_due_date: '2026-10-30T10:00:00Z',
-            new_promise_date: '2026-10-31T14:00:00Z',
-            status: 'DRAFT',
-            channel: 'WHATSAPP_SIM',
-            subject: 'Delivery Reschedule Notification: SKU-INS-100',
-            body: 'Dear Apollo Hospital Supply Desk, due to rail flooding at Arakkonam, your cold chain insulin shipment has been expedited via refrigerated road convoy. New delivery promise: 31-Oct 14:00 IST.',
-          },
-        ]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
+  // ── Loaders ────────────────────────────────────────────────────────────────
+  const loadQueue = useCallback(async () => {
+    const res: any = await api.approvals.getQueue();
+    const rows: any[] = Array.isArray(res) ? res : res?.queue ?? [];
+    setQueue(rows);
+    setSelectedPlanId((prev) => {
+      if (prev && rows.some((r) => String(r.plan_id) === prev)) return prev;
+      return rows[0] ? String(rows[0].plan_id) : '';
+    });
   }, []);
 
-  // Execution runner simulating 4 phases
-  const handleExecute = async () => {
-    if (!selectedPlan) return;
-    setExecuting(true);
-    setExecutionPhase(1);
+  const loadDetail = useCallback(async (planId: string) => {
+    if (!planId) {
+      setDetail(null);
+      return;
+    }
+    const r: any = await apiRequest(`/approvals/plans/${planId}/review`);
+    setDetail(r);
+  }, []);
 
-    setTimeout(() => setExecutionPhase(2), 600);
-    setTimeout(() => setExecutionPhase(3), 1200);
-    setTimeout(async () => {
-      setExecutionPhase(4);
-      try {
-        const diff = await api.approvals.execute(selectedPlan._id);
-        setExecutionDiff(diff || {
-          inventory_reserved: '40 units SKU-INS-100 locked at WH-BLR-02',
-          purchase_orders_created: ['PO-MED-9901 (20 units MedSupply)'],
-          carrier_booking: 'TVS Logistics Reefer Truck booked (NH-48 corridor)',
-          customer_notices_queued: 4,
-        });
-      } catch {
-        setExecutionDiff({
-          inventory_reserved: '40 units SKU-INS-100 locked at WH-BLR-02',
-          purchase_orders_created: ['PO-MED-9901 (20 units MedSupply)'],
-          carrier_booking: 'TVS Logistics Reefer Truck booked (NH-48 corridor)',
-          customer_notices_queued: 4,
-        });
-      }
-      setSelectedPlan((prev) => (prev ? { ...prev, status: 'EXECUTED' } : null));
-      setQueue((prev) =>
-        prev.map((p) => (p._id === selectedPlan._id ? { ...p, status: 'EXECUTED' } : p))
-      );
-      setExecuting(false);
-      setStatusMessage({
-        text: 'Plan successfully executed across physical ledgers, carrier APIs, and customer notice queues.',
-        type: 'success',
+  const loadSide = useCallback(async () => {
+    const results = await Promise.allSettled([
+      api.approvals.getDelegations(),
+      apiRequest<any[]>('/approvals/delegate-candidates'),
+      api.approvals.getNotices(),
+    ]);
+    const [d, c, n] = results;
+    setDelegations(d.status === 'fulfilled' && Array.isArray(d.value) ? d.value : []);
+    setCandidates(c.status === 'fulfilled' && Array.isArray(c.value) ? c.value : []);
+    setNotices(n.status === 'fulfilled' && Array.isArray(n.value) ? n.value : []);
+    const errs = results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map((r) => errText(r.reason));
+    setSideError(errs.length ? errs.join(' · ') : null);
+  }, []);
+
+  useEffect(() => {
+    loadQueue().catch((e) => setPageError(errText(e)));
+    const t = setInterval(() => loadQueue().catch(() => {}), 15000);
+    return () => clearInterval(t);
+  }, [loadQueue]);
+
+  useEffect(() => {
+    loadDetail(selectedPlanId)
+      .then(() => setPageError(null))
+      .catch((e) => {
+        setDetail(null);
+        setPageError(errText(e));
       });
-    }, 1800);
-  };
+    setExecResult(null);
+    setAckBreach(false);
+  }, [selectedPlanId, loadDetail]);
 
-  // Rollback action
-  const handleRollback = async () => {
-    if (!selectedPlan) return;
-    setActionLoading(true);
+  useEffect(() => {
+    loadSide();
+  }, [loadSide]);
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+  const run = async (fn: () => Promise<void>, ok: string) => {
+    setBusy(true);
+    setMsg(null);
     try {
-      await api.approvals.rollback(selectedPlan._id);
-      setSelectedPlan((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
-      setQueue((prev) =>
-        prev.map((p) => (p._id === selectedPlan._id ? { ...p, status: 'APPROVED' } : p))
-      );
-      setExecutionPhase(0);
-      setExecutionDiff(null);
-      setStatusMessage({
-        text: 'Execution successfully rolled back. Inventory reservations released and PO cancelled.',
-        type: 'success',
-      });
-    } catch {
-      setSelectedPlan((prev) => (prev ? { ...prev, status: 'APPROVED' } : null));
-      setExecutionPhase(0);
-      setExecutionDiff(null);
-      setStatusMessage({
-        text: 'Execution successfully rolled back. Inventory reservations released and PO cancelled.',
-        type: 'success',
-      });
+      await fn();
+      setMsg({ text: ok, type: 'success' });
+    } catch (e) {
+      setMsg({ text: errText(e), type: 'error' });
     } finally {
-      setActionLoading(false);
+      setBusy(false);
     }
   };
 
-  // Sign / Reject / Request changes confirmation
-  const handleActionConfirm = async () => {
-    if (!selectedPlan || !actionModal) return;
-    setActionLoading(true);
-
-    try {
-      if (actionModal === 'APPROVE') {
-        const userRole = currentUser?.role || 'Manager';
-        await api.approvals.approve(selectedPlan._id, userRole, actionNotes);
-
-        const updatedCompleted = [...(selectedPlan.approvals_completed || []), userRole];
-        const isFullyApproved = selectedPlan.required_roles.every((r) => updatedCompleted.includes(r));
-
-        setSelectedPlan((prev) =>
-          prev
-            ? {
-                ...prev,
-                approvals_completed: updatedCompleted,
-                status: isFullyApproved ? 'APPROVED' : 'SUBMITTED',
-              }
-            : null
-        );
-        setQueue((prev) =>
-          prev.map((p) =>
-            p._id === selectedPlan._id
-              ? {
-                  ...p,
-                  approvals_completed: updatedCompleted,
-                  status: isFullyApproved ? 'APPROVED' : 'SUBMITTED',
-                }
-              : p
-          )
-        );
-        setStatusMessage({
-          text: `Approval signed by ${currentUser?.role || 'User'}. ${
-            isFullyApproved ? 'All required roles satisfied. Plan READY FOR EXECUTION.' : 'Awaiting secondary sign-off.'
-          }`,
-          type: 'success',
-        });
-      } else if (actionModal === 'REJECT') {
-        await api.approvals.reject(selectedPlan._id, actionNotes || 'Plan cost exceeds acceptable margin');
-        setSelectedPlan((prev) => (prev ? { ...prev, status: 'REJECTED' } : null));
-        setStatusMessage({ text: 'Recovery plan rejected.', type: 'error' });
-      } else if (actionModal === 'REQUEST_CHANGES') {
-        await api.approvals.requestChanges(selectedPlan._id, actionNotes);
-        setStatusMessage({ text: 'Changes requested and sent back to Analyst.', type: 'success' });
-      }
-    } catch {
-      setStatusMessage({ text: `Action ${actionModal} processed.`, type: 'success' });
-    } finally {
-      setActionLoading(false);
-      setActionModal(null);
-      setActionNotes('');
-    }
+  const refreshPlan = async () => {
+    await loadQueue();
+    if (selectedPlanId) await loadDetail(selectedPlanId);
+    setNote('');
   };
 
-  // Create Delegation
-  const handleCreateDelegation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setActionLoading(true);
-    try {
-      const res = await api.approvals.createDelegation(newDelegationForm);
-      setDelegations((prev) => [res, ...prev]);
-      setNewDelegationOpen(false);
-      setStatusMessage({ text: 'Authority delegation recorded in governance audit ledger.', type: 'success' });
-    } catch {
-      const syn: DelegationItem = {
-        _id: `DEL-${Date.now().toString().slice(-4)}`,
-        delegator_id: currentUser?.id || 'mgr1',
-        delegator_name: currentUser?.display_name || 'Manager',
-        delegatee_id: newDelegationForm.delegatee_id,
-        delegatee_name: newDelegationForm.delegatee_id,
-        role: newDelegationForm.role,
-        reason: newDelegationForm.reason,
-        expires_at: newDelegationForm.expires_at,
-        status: 'ACTIVE',
-      };
-      setDelegations((prev) => [syn, ...prev]);
-      setNewDelegationOpen(false);
-      setStatusMessage({ text: 'Authority delegation recorded in governance audit ledger.', type: 'success' });
-    } finally {
-      setActionLoading(false);
+  const approve = () =>
+    run(async () => {
+      await post(`/plans/${selectedPlanId}/approve`, { comment: note.trim() || undefined });
+      await refreshPlan();
+    }, 'Sign-off recorded.');
+
+  const reject = () => {
+    if (!note.trim()) {
+      setMsg({ text: 'Enter a reason in the notes box before rejecting.', type: 'error' });
+      return;
     }
+    run(async () => {
+      await post(`/plans/${selectedPlanId}/reject`, { reason: note.trim() });
+      await refreshPlan();
+    }, 'Plan rejected.');
   };
 
-  // Revoke Delegation
-  const handleRevokeDelegation = async (id: string) => {
-    try {
+  const requestChanges = () => {
+    if (!note.trim()) {
+      setMsg({ text: 'Enter what needs to change in the notes box.', type: 'error' });
+      return;
+    }
+    run(async () => {
+      await post(`/plans/${selectedPlanId}/request-changes`, { comment: note.trim() });
+      await refreshPlan();
+    }, 'Changes requested. The plan returns to the planner.');
+  };
+
+  const execute = () =>
+    run(async () => {
+      const res = await post(`/plans/${selectedPlanId}/execute`, {
+        confirmed: true,
+        guardrail_acknowledgement: ackBreach,
+      });
+      setExecResult(res);
+      await refreshPlan();
+    }, 'Plan executed.');
+
+  const rollback = () =>
+    run(async () => {
+      await post(`/plans/${selectedPlanId}/rollback`, {
+        reason: note.trim() || 'Rollback requested from Approvals screen',
+      });
+      await refreshPlan();
+    }, 'Plan rolled back.');
+
+  const createDelegation = () =>
+    run(async () => {
+      if (!newDel.delegate_id) throw new Error('Choose who to delegate to.');
+      await post('/approvals/delegations', {
+        delegate_id: newDel.delegate_id,
+        role: newDel.role,
+        reason: newDel.reason,
+        valid_until: new Date(newDel.valid_until).toISOString(),
+      });
+      await loadSide();
+    }, 'Delegation created.');
+
+  const revokeDelegation = (id: string) =>
+    run(async () => {
       await api.approvals.revokeDelegation(id);
-    } catch {
-      // ignore
-    }
-    setDelegations((prev) =>
-      prev.map((d) => (d._id === id ? { ...d, status: 'REVOKED' } : d))
-    );
-    setStatusMessage({ text: 'Delegation authority revoked.', type: 'success' });
-  };
+      await loadSide();
+    }, 'Delegation revoked.');
 
-  // Release Notice
-  const handleReleaseNotice = async (id: string) => {
-    try {
+  const releaseNotice = (id: string) =>
+    run(async () => {
       await api.approvals.releaseNotice(id);
-    } catch {
-      // ignore
-    }
-    setNotices((prev) =>
-      prev.map((n) => (n._id === id ? { ...n, status: 'RELEASED' } : n))
-    );
-    setStatusMessage({ text: 'Customer reschedule notice cryptographically dispatched.', type: 'success' });
-  };
+      await loadSide();
+    }, 'Notice released to the outbox.');
 
-  const isDualApprovalRequired = (selectedPlan?.total_cost || 0) > 5000;
-  const isApproved = selectedPlan?.status === 'APPROVED';
-  const isExecuted = selectedPlan?.status === 'EXECUTED';
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const plan = detail?.plan;
+  const signoffs: any[] = detail?.signoffs ?? [];
+  const actions: any[] = detail?.actions ?? [];
+  const isCreator = !!plan && !!me && (plan.created_by === me.id || plan.submitted_by === me.id);
+  const myApprovalPending = signoffs.some((s) => s.status === 'PENDING' && s.required_role === me?.role);
+  const canSignHere = canApprove && myApprovalPending && !isCreator && plan?.status === 'PENDING_APPROVAL';
+  const canExecuteHere = isManager && plan?.status === 'APPROVED' && !isCreator;
+  const canRollbackHere = isManager && plan?.status === 'EXECUTED';
 
   return (
     <div className="p-6 space-y-6 text-slate-900 max-w-7xl mx-auto">
@@ -380,567 +255,381 @@ export function ApprovalsScreen() {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">7. Approvals and Execution</h1>
+            <h1 className="text-xl font-bold tracking-tight">Approvals and Execution</h1>
             <span className="px-2 py-0.5 text-xs font-mono rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-              Role-Governed Ledger
+              Role-governed ledger
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Separation of duties, dual-role sign-off thresholds, staged execution, and reversible state rollback
+            Separation of duties, sign-off by role, staged execution, and reversible rollback
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={loadData}>
-            Refresh Queue
-          </Button>
-        </div>
+        <button
+          onClick={() => {
+            loadQueue().catch((e) => setPageError(errText(e)));
+            loadSide();
+          }}
+          className="px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-semibold hover:bg-slate-50"
+        >
+          Refresh
+        </button>
       </div>
 
-      {/* Status banner */}
-      {statusMessage && (
+      {pageError && <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800">{pageError}</div>}
+      {msg && (
         <div
-          className={`p-3.5 rounded-lg border text-xs flex items-center justify-between animate-fadeIn ${
-            statusMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border-rose-200 text-rose-800'
+          className={`p-3 rounded-lg border text-xs flex justify-between ${
+            msg.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
           }`}
         >
-          <div className="flex items-center gap-2 font-medium">
-            {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-            )}
-            <span>{statusMessage.text}</span>
-          </div>
-          <button onClick={() => setStatusMessage(null)} className="text-slate-400 hover:text-slate-600">
-            <XCircle className="w-3.5 h-3.5" />
-          </button>
+          <span>{msg.text}</span>
+          <button onClick={() => setMsg(null)} className="font-bold">✕</button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm font-medium">
-        <button
-          onClick={() => setActiveTab('queue')}
-          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
-            activeTab === 'queue'
-              ? 'border-indigo-600 text-indigo-600 font-semibold'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <FileCheck className="w-4 h-4" />
-          Approvals & Execution Queue ({queue.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('delegations')}
-          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
-            activeTab === 'delegations'
-              ? 'border-indigo-600 text-indigo-600 font-semibold'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <UserCheck className="w-4 h-4" />
-          Authority Delegations ({delegations.filter((d) => d.status === 'ACTIVE').length})
-        </button>
-        <button
-          onClick={() => setActiveTab('notices')}
-          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
-            activeTab === 'notices'
-              ? 'border-indigo-600 text-indigo-600 font-semibold'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Send className="w-4 h-4" />
-          Customer Reschedule Notices ({notices.length})
-        </button>
+      <div className="flex gap-2 border-b border-slate-200">
+        {(
+          [
+            ['queue', `Approvals queue (${queue.length})`],
+            ['delegations', `Authority delegations (${delegations.length})`],
+            ['notices', `Customer notices (${notices.length})`],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-3 py-2 text-xs font-semibold border-b-2 -mb-px ${
+              tab === key ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'queue' && (
-        <div className="space-y-6">
-          {loading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          ) : queue.length === 0 ? (
-            <EmptyState
-              title="No plans awaiting approval"
-              description="Plans generated and submitted in the Recovery Workbench will queue here for authorized sign-off."
-            />
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Pending Plans List */}
-              <div className="space-y-3 lg:col-span-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
-                  Pending Governance Queue
-                </span>
-
-                <div className="space-y-2.5">
-                  {queue.map((p) => {
-                    const isSelected = selectedPlan?._id === p._id;
-                    return (
-                      <div
-                        key={p._id}
-                        onClick={() => setSelectedPlan(p)}
-                        className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-indigo-50/50 border-indigo-600 shadow-xs ring-2 ring-indigo-500/10'
-                            : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold text-xs text-slate-900">
-                            {p.plan_code || p._id}
-                          </span>
-                          <StatusChip status={p.status} />
-                        </div>
-
-                        <div className="mt-2 text-xs text-slate-600">
-                          Scope: {p.scope_description.slice(0, 48)}...
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                          <span className="text-slate-500">Net Savings:</span>
-                          <span className="font-mono font-bold text-emerald-700">
-                            <MoneyText amount={p.net_savings} />
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+      {/* ── Queue ── */}
+      {tab === 'queue' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Pending for your role</h2>
+            {queue.length === 0 && (
+              <div className="p-4 rounded-lg bg-white border border-dashed border-slate-300 text-xs text-slate-500">
+                Nothing waiting for your sign-off. Plans appear here after a planner submits them.
               </div>
+            )}
+            {queue.map((q) => {
+              const id = String(q.plan_id);
+              return (
+                <button
+                  key={String(q.approval_id)}
+                  onClick={() => setSelectedPlanId(id)}
+                  className={`w-full text-left p-4 rounded-lg border transition ${
+                    selectedPlanId === id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-semibold">Plan {id.slice(-8)}</span>
+                    <Badge text={q.required_role} />
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Version {q.plan_version} · {q.strategy ?? 'strategy n/a'}
+                  </div>
+                  <div className="flex justify-between text-xs mt-2">
+                    <span className="text-slate-500">Net saving</span>
+                    <span className="font-mono font-semibold text-emerald-700">{inr(q.saving)}</span>
+                  </div>
+                  {q.delegation_chip && (
+                    <div className="text-[11px] text-indigo-700 mt-1">
+                      Delegated from {q.delegation_chip.delegated_from}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-              {/* Right Column: Selected Plan Details & Action Terminal */}
-              {selectedPlan && (
-                <div className="lg:col-span-2 space-y-5">
-                  <div className="p-6 rounded-xl bg-white border border-slate-200 shadow-xs space-y-4">
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-base font-bold text-slate-900">
-                            {selectedPlan.plan_code || selectedPlan._id}
-                          </h2>
-                          <StatusChip status={selectedPlan.status} />
-                        </div>
-                        <span className="text-xs text-slate-500 font-mono mt-0.5 block">
-                          Disruption: {selectedPlan.disruption_id} &bull; v{selectedPlan.version}
-                        </span>
-                      </div>
-
+          <div className="lg:col-span-2 space-y-6">
+            {!plan ? (
+              <div className="p-8 rounded-xl bg-white border border-dashed border-slate-300 text-center text-sm text-slate-500">
+                Select a plan to review it.
+              </div>
+            ) : (
+              <>
+                {/* Plan header and actions */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
                       <div className="flex items-center gap-2">
-                        {selectedPlan.status === 'SUBMITTED' && (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setActionModal('REQUEST_CHANGES')}
-                            >
-                              Request Changes
-                            </Button>
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              onClick={() => setActionModal('REJECT')}
-                            >
-                              Reject
-                            </Button>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => setActionModal('APPROVE')}
-                            >
-                              Sign & Approve
-                            </Button>
-                          </>
-                        )}
-                        {isApproved && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={handleExecute}
-                            disabled={executing}
-                          >
-                            <Play className="w-3.5 h-3.5 mr-1" />
-                            {executing ? 'Executing Ledger...' : 'Execute Recovery Plan'}
-                          </Button>
-                        )}
-                        {isExecuted && (
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={handleRollback}
-                            disabled={actionLoading}
-                          >
-                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                            Rollback Plan
-                          </Button>
-                        )}
+                        <h2 className="text-base font-bold font-mono">Plan {String(plan._id).slice(-8)}</h2>
+                        <Badge text={plan.status} cls={STATUS_CLS[plan.status]} />
                       </div>
+                      <p className="text-xs text-slate-500 mt-1">{plan.scope}</p>
+                      <p className="text-xs text-slate-500 font-mono">Version {plan.version} · Contract {plan.contract_hash ? `${String(plan.contract_hash).slice(0, 12)}…` : 'not sealed'}</p>
                     </div>
-
-                    {/* Threshold & Separation of Duties Policy Banner */}
-                    <div
-                      className={`p-3.5 rounded-xl border text-xs flex items-center justify-between ${
-                        isDualApprovalRequired
-                          ? 'bg-amber-50 border-amber-200 text-amber-900'
-                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                        <div>
-                          <span className="font-bold block">
-                            {isDualApprovalRequired
-                              ? 'Dual-Approval Policy Enforced (Plan Cost > INR 5,000 Threshold)'
-                              : 'Standard Single-Role Approval Sufficient'}
-                          </span>
-                          <span className="text-slate-600 text-[11px]">
-                            Must be confirmed independently by both Operational Manager and Procurement Approver.
-                          </span>
-                        </div>
-                      </div>
-                      <span className="font-mono text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-900 font-semibold">
-                        Cost: <MoneyText amount={selectedPlan.total_cost} />
-                      </span>
+                    <div className="grid grid-cols-3 gap-3 text-xs">
+                      <Mini label="Baseline" value={inr(plan.baseline)} />
+                      <Mini label="Plan cost" value={inr(plan.objective)} />
+                      <Mini label="Saving" value={`${inr(plan.saving)} (${plan.saving_pct}%)`} tone="text-emerald-700" />
                     </div>
+                  </div>
 
-                    {/* Role Sign-off Status Tracker */}
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
-                        Required Approver Sign-offs
-                      </span>
+                  {plan.escalation_required && (
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                      This plan is escalated. A guardrail breach must be acknowledged before execution.
+                    </div>
+                  )}
+                  {isCreator && (
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
+                      You created or submitted this plan, so you cannot approve or execute it (separation of duties).
+                    </div>
+                  )}
+                </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {selectedPlan.required_roles.map((role) => {
-                          const isDone = selectedPlan.approvals_completed?.includes(role);
-                          return (
-                            <div
-                              key={role}
-                              className={`p-3 rounded-lg border flex items-center justify-between text-xs ${
-                                isDone
-                                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-                                  : 'bg-white border-slate-200 text-slate-600'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                {isDone ? (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                ) : (
-                                  <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
-                                )}
-                                <span className="font-semibold">{role}</span>
-                              </div>
-                              <span className="font-mono text-[10px] uppercase font-bold">
-                                {isDone ? 'SIGNED' : 'AWAITING'}
-                              </span>
+                {/* Sign-offs */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Required sign-offs</h3>
+                  {signoffs.length === 0 ? (
+                    <p className="text-xs text-slate-500">No sign-off rows exist for this plan version yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {signoffs.map((s) => (
+                        <div key={String(s._id)} className="p-3 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="font-semibold">{String(s.required_role).replace(/_/g, ' ')}</div>
+                            <div className="text-slate-500">
+                              {s.decided_by ? `${s.decided_by.display_name} · ${when(s.decided_at)}` : 'Awaiting decision'}
                             </div>
-                          );
-                        })}
-                      </div>
+                            {s.comment && <div className="text-slate-600 italic mt-0.5">"{s.comment}"</div>}
+                          </div>
+                          <Badge text={s.status} cls={STATUS_CLS[s.status] ?? STATUS_CLS.DRAFT} />
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
 
-                    {/* 4-Step Execution Engine Progress Tracker */}
-                    <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
-                          Automated Execution Sequence
-                        </span>
-                        {isExecuted && (
-                          <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            All Steps Committed
-                          </span>
-                        )}
-                      </div>
+                {/* Decision controls */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Decision</h3>
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Notes: required for reject and request changes, optional for approval"
+                    rows={2}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={approve} disabled={busy || !canSignHere} className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-semibold disabled:opacity-40">
+                      Sign and approve
+                    </button>
+                    <button onClick={requestChanges} disabled={busy || !canSignHere} className="px-3 py-1.5 border border-slate-300 rounded-md text-xs font-semibold disabled:opacity-40">
+                      Request changes
+                    </button>
+                    <button onClick={reject} disabled={busy || !canSignHere} className="px-3 py-1.5 bg-rose-600 text-white rounded-md text-xs font-semibold disabled:opacity-40">
+                      Reject
+                    </button>
+                  </div>
+                  {!canSignHere && (
+                    <p className="text-xs text-slate-500">
+                      {!canApprove
+                        ? `Your role (${me?.role}) cannot sign plans.`
+                        : isCreator
+                        ? 'You cannot sign a plan you created.'
+                        : !myApprovalPending
+                        ? 'No sign-off is pending for your role on this plan.'
+                        : `Plan is ${plan.status}, so it is not open for sign-off.`}
+                    </p>
+                  )}
+                </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                        <div
-                          className={`p-3.5 rounded-lg border space-y-1 ${
-                            executionPhase >= 1 || isExecuted
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                              : 'bg-slate-50 border-slate-200 text-slate-500'
-                          }`}
-                        >
-                          <span className="text-[10px] font-mono font-bold block">STEP 1</span>
-                          <span className="font-semibold block">Inventory Lock</span>
-                          <span className="text-[11px] block">Reserve WH-BLR buffer</span>
+                {/* Actions to execute */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Actions in this plan</h3>
+                  {actions.length === 0 ? (
+                    <p className="text-xs text-slate-500">No actions recorded.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {actions.map((a) => (
+                        <div key={String(a._id)} className="p-3 rounded-lg border border-slate-200 text-xs space-y-1">
+                          <div className="font-mono text-[11px] text-slate-500">#{a.seq}</div>
+                          <div className="font-semibold">{String(a.action_type).replace(/_/g, ' ')}</div>
+                          <div className="text-slate-600">{a.quantity} units · {a.duration_hours} h</div>
+                          <div className="flex justify-between pt-1">
+                            <span className="text-slate-500">Cost</span>
+                            <span className="font-mono">{inr(a.cost)}</span>
+                          </div>
+                          <div className="text-slate-500">Status: {a.status}</div>
                         </div>
-
-                        <div
-                          className={`p-3.5 rounded-lg border space-y-1 ${
-                            executionPhase >= 2 || isExecuted
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                              : 'bg-slate-50 border-slate-200 text-slate-500'
-                          }`}
-                        >
-                          <span className="text-[10px] font-mono font-bold block">STEP 2</span>
-                          <span className="font-semibold block">PO Issuance</span>
-                          <span className="text-[11px] block">40 units to SUP-2</span>
-                        </div>
-
-                        <div
-                          className={`p-3.5 rounded-lg border space-y-1 ${
-                            executionPhase >= 3 || isExecuted
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                              : 'bg-slate-50 border-slate-200 text-slate-500'
-                          }`}
-                        >
-                          <span className="text-[10px] font-mono font-bold block">STEP 3</span>
-                          <span className="font-semibold block">Carrier Booking</span>
-                          <span className="text-[11px] block">NH-48 road reefer</span>
-                        </div>
-
-                        <div
-                          className={`p-3.5 rounded-lg border space-y-1 ${
-                            executionPhase >= 4 || isExecuted
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                              : 'bg-slate-50 border-slate-200 text-slate-500'
-                          }`}
-                        >
-                          <span className="text-[10px] font-mono font-bold block">STEP 4</span>
-                          <span className="font-semibold block">Notice Staged</span>
-                          <span className="text-[11px] block">Broadcast promises</span>
-                        </div>
-                      </div>
+                      ))}
                     </div>
+                  )}
 
-                    {/* Execution State Diff */}
-                    {executionDiff && (
-                      <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 space-y-2 animate-fadeIn text-xs">
-                        <span className="font-semibold text-indigo-950 block uppercase tracking-wider text-[11px]">
-                          Post-Execution Ledger Mutations:
-                        </span>
-                        <div className="grid grid-cols-2 gap-2 text-indigo-900 font-mono text-[11px]">
-                          <div>&bull; Inventory: {executionDiff.inventory_reserved}</div>
-                          <div>&bull; Purchase Orders: {executionDiff.purchase_orders_created?.join(', ')}</div>
-                          <div>&bull; Transit: {executionDiff.carrier_booking}</div>
-                          <div>&bull; Notices: {executionDiff.customer_notices_queued} ready for release</div>
-                        </div>
+                  {canExecuteHere && (
+                    <div className="pt-3 border-t border-slate-100 space-y-3">
+                      <label className="flex items-center gap-2 text-xs text-slate-700">
+                        <input type="checkbox" checked={ackBreach} onChange={(e) => setAckBreach(e.target.checked)} />
+                        I acknowledge any guardrail breach on this plan (needed only when escalated)
+                      </label>
+                      <button onClick={execute} disabled={busy} className="px-3 py-1.5 bg-emerald-600 text-white rounded-md text-xs font-semibold disabled:opacity-40">
+                        Execute approved plan
+                      </button>
+                    </div>
+                  )}
+                  {execResult && (
+                    <pre className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px] overflow-x-auto">
+                      {JSON.stringify(execResult, null, 2)}
+                    </pre>
+                  )}
+                  {canRollbackHere && (
+                    <button onClick={rollback} disabled={busy} className="px-3 py-1.5 border border-rose-300 text-rose-700 rounded-md text-xs font-semibold disabled:opacity-40">
+                      Roll back execution (uses the notes box as the reason)
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Delegations ── */}
+      {tab === 'delegations' && (
+        <div className="space-y-6">
+          {sideError && <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">{sideError}</div>}
+
+          <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Active delegations</h2>
+            {delegations.length === 0 ? (
+              <p className="text-xs text-slate-500">No active delegations involving you.</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {delegations.map((d) => (
+                  <div key={String(d._id)} className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="font-semibold">
+                        {d.delegator_id?.display_name ?? 'Delegator'} → {d.delegate_id?.display_name ?? 'Delegate'}
                       </div>
+                      <div className="text-slate-500">
+                        Role: {String(d.role).replace(/_/g, ' ')} · Until {when(d.valid_until)}
+                      </div>
+                      {d.reason && <div className="text-slate-500 italic">{d.reason}</div>}
+                    </div>
+                    {isManager && (
+                      <button onClick={() => revokeDelegation(String(d._id))} disabled={busy} className="px-2.5 py-1 border border-rose-300 text-rose-700 rounded-md font-semibold disabled:opacity-40">
+                        Revoke
+                      </button>
                     )}
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
+          </div>
+
+          {isManager && (
+            <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Delegate approval authority</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <label className="space-y-1">
+                  <span className="text-slate-600">Delegate to</span>
+                  <select
+                    value={newDel.delegate_id}
+                    onChange={(e) => setNewDel({ ...newDel, delegate_id: e.target.value })}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-md"
+                  >
+                    <option value="">Choose a user</option>
+                    {candidates.map((c) => (
+                      <option key={String(c._id)} value={String(c._id)}>
+                        {c.display_name} ({String(c.role).replace(/_/g, ' ')})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-600">Role being delegated</span>
+                  <select
+                    value={newDel.role}
+                    onChange={(e) => setNewDel({ ...newDel, role: e.target.value })}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-md"
+                  >
+                    <option value="Procurement_Approver">Procurement Approver</option>
+                    <option value="Manager">Manager</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-600">Valid until</span>
+                  <input
+                    type="datetime-local"
+                    value={newDel.valid_until}
+                    onChange={(e) => setNewDel({ ...newDel, valid_until: e.target.value })}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-md font-mono"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-slate-600">Reason</span>
+                  <input
+                    type="text"
+                    value={newDel.reason}
+                    onChange={(e) => setNewDel({ ...newDel, reason: e.target.value })}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-md"
+                  />
+                </label>
+              </div>
+              <button onClick={createDelegation} disabled={busy} className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-semibold disabled:opacity-40">
+                Create delegation
+              </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Tab 2: Authority Delegations */}
-      {activeTab === 'delegations' && (
+      {/* ── Notices ── */}
+      {tab === 'notices' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Active Authority Delegations</h3>
-              <p className="text-xs text-slate-500">
-                Temporary sign-off delegation during emergencies with mandatory expiry and reason tracking
-              </p>
+          {sideError && <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">{sideError}</div>}
+          {notices.length === 0 && (
+            <div className="p-8 rounded-xl bg-white border border-dashed border-slate-300 text-center text-sm text-slate-500">
+              No customer notices yet. Notices are drafted from a recovery plan that changes delivery promises.
             </div>
-            <Button variant="primary" size="sm" onClick={() => setNewDelegationOpen(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              New Delegation
-            </Button>
-          </div>
-
-          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl bg-white shadow-xs overflow-hidden">
-            {delegations.map((d) => (
-              <div key={d._id} className="p-4 flex items-center justify-between text-xs hover:bg-slate-50/70 transition-colors">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900">{d.delegator_name}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
-                    <span className="font-bold text-indigo-600">{d.delegatee_name}</span>
-                    <span className="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-mono text-slate-700 border border-slate-200">
-                      {d.role}
-                    </span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                        d.status === 'ACTIVE'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-slate-100 text-slate-500 border-slate-200'
-                      }`}
-                    >
-                      {d.status}
-                    </span>
-                  </div>
-                  <div className="text-slate-600">Reason: {d.reason}</div>
-                  <div className="text-slate-400">
-                    Expires: <TimeText iso={d.expires_at} />
-                  </div>
-                </div>
-
-                {d.status === 'ACTIVE' && (
-                  <Button variant="danger" size="sm" onClick={() => handleRevokeDelegation(d._id)}>
-                    Revoke Authority
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: Customer Notices */}
-      {activeTab === 'notices' && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Customer Reschedule Notices</h3>
-            <p className="text-xs text-slate-500">
-              Contractual promise date adjustments staged for customer dispatch
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {notices.map((n) => (
-              <div key={n._id} className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs space-y-3 text-xs">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          )}
+          {notices.map((n) => {
+            const released = n.status === 'RELEASED' || n.status === 'SENT';
+            return (
+              <div key={String(n._id)} className="p-5 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <span className="font-bold text-slate-900 text-sm block">{n.customer_name}</span>
-                    <span className="font-mono text-indigo-600 text-xs font-semibold">{n.order_code}</span>
+                    <div className="text-sm font-semibold">{n.subject ?? 'Customer notice'}</div>
+                    <div className="text-xs text-slate-500">
+                      {n.customer_name ?? n.customer ?? '—'} · {n.order_code ?? n.order_id ?? '—'} · {n.channel ?? 'channel n/a'}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        n.status === 'RELEASED'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-800 border-amber-200'
-                      }`}
-                    >
-                      {n.status}
-                    </span>
-                    {n.status === 'DRAFT' && (
-                      <Button variant="primary" size="sm" onClick={() => handleReleaseNotice(n._id)}>
-                        <Send className="w-3.5 h-3.5 mr-1" />
-                        Release Notice
-                      </Button>
-                    )}
-                  </div>
+                  <Badge text={n.status ?? 'DRAFT'} />
                 </div>
-
-                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="font-semibold text-slate-900">{n.subject}</div>
-                  <p className="text-slate-600 leading-relaxed">{n.body}</p>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-500 pt-1">
-                  <span>Channel: {n.channel}</span>
-                  <span>
-                    New Committed Date: <TimeText iso={n.new_promise_date} />
+                {n.body && <p className="text-xs text-slate-700 whitespace-pre-line">{n.body}</p>}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    {n.new_promise_date ? `New promise: ${when(n.new_promise_date)}` : ''}
                   </span>
+                  {isManager && !released && (
+                    <button onClick={() => releaseNotice(String(n._id))} disabled={busy} className="px-3 py-1.5 bg-indigo-600 text-white rounded-md font-semibold disabled:opacity-40">
+                      Release to outbox
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Action Dialog (Approve / Reject / Changes) */}
-      <Dialog
-        isOpen={Boolean(actionModal)}
-        onClose={() => setActionModal(null)}
-        title={
-          actionModal === 'APPROVE'
-            ? 'Sign & Authorize Recovery Plan'
-            : actionModal === 'REJECT'
-            ? 'Reject Recovery Plan'
-            : 'Request Plan Modifications'
-        }
-      >
-        <div className="space-y-4 text-xs">
-          <p className="text-slate-600">
-            {actionModal === 'APPROVE'
-              ? 'Your cryptographic signature and role will be affixed to the immutable audit ledger.'
-              : 'Provide an explicit reason for this action to be logged in the governance record.'}
-          </p>
-
-          <div className="space-y-1">
-            <label className="text-slate-700 font-semibold">Notes & Justification:</label>
-            <textarea
-              rows={3}
-              className="w-full p-2.5 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={actionNotes}
-              onChange={(e) => setActionNotes(e.target.value)}
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setActionModal(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant={actionModal === 'REJECT' ? 'danger' : 'primary'}
-              onClick={handleActionConfirm}
-              disabled={actionLoading}
-            >
-              {actionLoading ? 'Processing...' : 'Confirm Action'}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-
-      {/* New Delegation Modal */}
-      <Dialog
-        isOpen={newDelegationOpen}
-        onClose={() => setNewDelegationOpen(false)}
-        title="Delegate Approval Authority"
-      >
-        <form onSubmit={handleCreateDelegation} className="space-y-3 text-xs">
-          <div className="space-y-1">
-            <label className="text-slate-700 font-semibold">Delegatee Username:</label>
-            <input
-              type="text"
-              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
-              value={newDelegationForm.delegatee_id}
-              onChange={(e) => setNewDelegationForm({ ...newDelegationForm, delegatee_id: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-slate-700 font-semibold">Role Delegated:</label>
-            <select
-              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
-              value={newDelegationForm.role}
-              onChange={(e) => setNewDelegationForm({ ...newDelegationForm, role: e.target.value })}
-            >
-              <option value="Procurement_Approver">Procurement_Approver</option>
-              <option value="Manager">Manager</option>
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-slate-700 font-semibold">Expiration Timestamp:</label>
-            <input
-              type="datetime-local"
-              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
-              value={newDelegationForm.expires_at}
-              onChange={(e) => setNewDelegationForm({ ...newDelegationForm, expires_at: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-slate-700 font-semibold">Operational Reason:</label>
-            <textarea
-              rows={2}
-              className="w-full p-2 rounded-md bg-white border border-slate-300 text-slate-900 shadow-xs"
-              value={newDelegationForm.reason}
-              onChange={(e) => setNewDelegationForm({ ...newDelegationForm, reason: e.target.value })}
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setNewDelegationOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={actionLoading}>
-              Create Delegation
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+function Mini({ label, value, tone = 'text-slate-900' }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 min-w-[110px]">
+      <div className="text-slate-500">{label}</div>
+      <div className={`font-mono font-semibold ${tone}`}>{value}</div>
     </div>
   );
 }

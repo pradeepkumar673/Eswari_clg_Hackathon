@@ -15,6 +15,7 @@ import { Approval } from '../models/approvals.js';
 import { RecoveryPlan } from '../models/recovery-plans.js';
 import { ApprovalDelegation } from '../models/approval-delegations.js';
 import { User } from '../models/users.js';
+import { PlanAction } from '../models/plan-actions.js';
 import { createDelegation, revokeDelegation } from '../services/delegations.js';
 import { simClock } from '../services/simClock.js';
 
@@ -186,6 +187,89 @@ approvalsRouter.delete(
         res.status(e.statusCode).json({ error: { code: e.code || 'BAD_REQUEST', message: e.message } });
         return;
       }
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /approvals/plans/:id/review
+// Everything the approval panel needs for one plan: summary, actions, and per-role sign-offs.
+// ---------------------------------------------------------------------------
+approvalsRouter.get(
+  '/plans/:id/review',
+  authenticateToken,
+  requireAnyPermission(['approve_reallocate_split', 'approve_expedite_alt_supplier']),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({ error: { code: 'BAD_ID', message: 'Invalid plan id' } });
+        return;
+      }
+      const plan: any = await RecoveryPlan.findById(id).lean();
+      if (!plan) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Plan not found' } });
+        return;
+      }
+
+      const [actions, signoffs] = await Promise.all([
+        PlanAction.find({ plan_id: plan._id }).sort({ seq: 1 }).lean(),
+        Approval.find({ plan_id: plan._id, plan_version: plan.version })
+          .populate('decided_by', 'display_name role')
+          .sort({ required_role: 1 })
+          .lean(),
+      ]);
+
+      const objective: number = plan.objective_value ?? plan.total_cost ?? 0;
+      const baseline: number = plan.baseline_value ?? 0;
+
+      res.status(200).json({
+        plan: {
+          _id: String(plan._id),
+          version: plan.version,
+          status: plan.status,
+          strategy: plan.strategy,
+          objective,
+          baseline,
+          saving: baseline - objective,
+          saving_pct: baseline > 0 ? Math.round(((baseline - objective) / baseline) * 100) : 0,
+          scope: plan.scope ?? 'portfolio-level constrained optimisation',
+          contract_hash: plan.contract_hash ?? null,
+          escalation_required: Boolean(plan.decision_contract?.escalation_approvals_required),
+          created_by: plan.created_by ? String(plan.created_by) : null,
+          submitted_by: plan.submitted_by ? String(plan.submitted_by) : null,
+          created_at: plan.created_at,
+          submitted_at: plan.submitted_at,
+          approved_at: plan.approved_at,
+        },
+        actions,
+        signoffs,
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /approvals/delegate-candidates
+// Users who could be given approval authority (Managers and Procurement Approvers, not the caller).
+// ---------------------------------------------------------------------------
+approvalsRouter.get(
+  '/delegate-candidates',
+  authenticateToken,
+  requirePermission('manage_delegations'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const users = await User.find({
+        role: { $in: ['Manager', 'Procurement_Approver'] },
+        _id: { $ne: req.user!._id },
+      })
+        .select('username display_name role')
+        .lean();
+      res.status(200).json(users);
+    } catch (e) {
       next(e);
     }
   },
