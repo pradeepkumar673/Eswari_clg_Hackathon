@@ -14,8 +14,11 @@ import mongoose from 'mongoose';
 import { connectDB } from '../apps/api/src/db.js';
 import { ensureIndexes } from '../apps/api/src/models/index.js';
 import { Shipment } from '../apps/api/src/models/shipments.js';
+import { Disruption } from '../apps/api/src/models/disruptions.js';
+import { OrderRiskSnapshot } from '../apps/api/src/models/order-risk-snapshots.js';
 import { reconcile, type IncomingEvent } from '../apps/api/src/services/reconciler.js';
 import { simClock } from '../apps/api/src/services/simClock.js';
+import '../apps/api/src/services/impactEngine.js'; // registers the EVENT_APPLIED subscriber
 
 const HOUR = 3_600_000;
 
@@ -73,6 +76,15 @@ async function main() {
 
     console.log(
       `[seed-investigation] ${p.code} ${p.source} ${p.event_type} -> ${result.status}: ${result.reason}`,
+    );
+  }
+
+  const disruptionCount = await Disruption.countDocuments({});
+  const snapshotCount = await OrderRiskSnapshot.countDocuments({});
+  console.log(`[seed-investigation] disruptions=${disruptionCount} order_risk_snapshots=${snapshotCount}`);
+  if (snapshotCount === 0) {
+    console.log(
+      '[seed-investigation] No affected orders. Impact needs an open order at the same warehouse that demands a SKU on the delayed shipment.',
     );
   }
 

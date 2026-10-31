@@ -38,6 +38,7 @@ import { getDisruptionFingerprints } from '../services/fingerprints.js';
 import { EvidenceItem } from '../models/evidence-items.js';
 import { CctvEvent } from '../models/cctv-events.js';
 import { Warehouse } from '../models/warehouses.js';
+import { Sku } from '../models/skus.js';
 import { config } from '../config.js';
 
 export const disruptionsRouter = Router();
@@ -83,7 +84,21 @@ disruptionsRouter.get(
   },
 );
 
-// GET /disruptions/:id/impact
+// ── GET /disruptions/:id/impact ─────────────────────────────────────────────
+// Real impact for one disruption: ranked orders, summary, and heat-grid.
+const IMPACT_HOUR_MS = 3_600_000;
+const impactRound1 = (n: number) => Math.round(n * 10) / 10;
+const IMPACT_WEIGHTS = { urgency: 35, shortage: 30, delay: 20, priority: 15 } as const;
+const BAND_RANK: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
+
+/** Display band from the 0-100 score. Thresholds match the screen's labels. */
+function scoreToDisplayBand(score: number): 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' {
+  if (score >= 80) return 'CRITICAL';
+  if (score >= 60) return 'HIGH';
+  if (score >= 40) return 'MEDIUM';
+  return 'LOW';
+}
+
 disruptionsRouter.get(
   '/:id/impact',
   authenticateToken,
@@ -95,18 +110,124 @@ disruptionsRouter.get(
       return;
     }
 
-    const snapshots = await OrderRiskSnapshot.find({ disruption_id: id })
-      .populate('order_id', 'code customer_name priority due_at status penalty_per_unit_short')
-      .lean();
+    const disruption: any = await Disruption.findById(id).lean();
+    if (!disruption) {
+      res.status(404).json({ error: 'Not Found', message: 'Disruption not found' });
+      return;
+    }
+
+    const shipment: any = await Shipment.findById(disruption.shipment_id).lean();
+    const etaMs = shipment
+      ? new Date(shipment.resolved_eta ?? shipment.current_eta).getTime()
+      : null;
+
+    const snapshots: any[] = await OrderRiskSnapshot.find({ disruption_id: disruption._id }).lean();
+    const orderIds = snapshots.map((s) => s.order_id);
+
+    const [orders, lines, warehouses, skus] = await Promise.all([
+      Order.find({ _id: { $in: orderIds } }).lean(),
+      OrderLine.find({ order_id: { $in: orderIds } }).lean(),
+      Warehouse.find({}).lean(),
+      Sku.find({}).lean(),
+    ]);
+
+    const orderMap = new Map<string, any>(orders.map((o: any) => [String(o._id), o]));
+    const whMap = new Map<string, any>(warehouses.map((w: any) => [String(w._id), w]));
+    const skuMap = new Map<string, any>(skus.map((k: any) => [String(k._id), k]));
+    const lineByOrder = new Map<string, any>();
+    for (const l of lines) {
+      if (!lineByOrder.has(String(l.order_id))) lineByOrder.set(String(l.order_id), l);
+    }
+
+    const ranked = snapshots
+      .map((s) => {
+        const o: any = orderMap.get(String(s.order_id));
+        const line: any = lineByOrder.get(String(s.order_id));
+        const sku: any = line ? skuMap.get(String(line.sku_id)) : null;
+
+        const dueMs = o ? new Date(o.due_at).getTime() : 0;
+        // Hours the best-known ETA lands after the order's due date (0 if on time)
+        const hoursLate = etaMs !== null ? Math.max(0, impactRound1((etaMs - dueMs) / IMPACT_HOUR_MS)) : 0;
+        // Exposure = contract penalty per hour x hours late
+        const penalty = o ? Math.round((o.penalty_per_hour || 0) * hoursLate) : 0;
+        const score: number = s.risk_score;
+
+        return {
+          order_id: String(s.order_id),
+          order_code: o?.code ?? String(s.order_id),
+          customer_name: o?.customer_name ?? '—',
+          priority: o?.priority ?? null,
+          sku_code: sku?.code ?? null,
+          quantity: line?.quantity ?? 0,
+          warehouse_code: whMap.get(String(o?.warehouse_id))?.code ?? null,
+          original_due_date: o?.due_at ?? null,
+          best_recoverable_date: shipment?.promised_eta ?? null,
+          committed_promise_date: null,
+          hours_late: hoursLate,
+          penalty_exposure: penalty,
+          score,
+          best_case_score: s.best_case_score,
+          worst_case_score: s.worst_case_score,
+          risk_band: scoreToDisplayBand(score),
+          policy_band: s.band,
+          // Points add up to the score: 35*U + 30*S + 20*D + 15*P
+          factors: {
+            urgency_pts: impactRound1(IMPACT_WEIGHTS.urgency * s.urgency),
+            shortage_pts: impactRound1(IMPACT_WEIGHTS.shortage * s.supply_gap),
+            delay_pts: impactRound1(IMPACT_WEIGHTS.delay * s.delay_factor),
+            priority_pts: impactRound1(IMPACT_WEIGHTS.priority * s.penalty_factor),
+          },
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.penalty_exposure - a.penalty_exposure);
+
+    const countBand = (band: string) => ranked.filter((r) => r.risk_band === band).length;
+
+    const cells = new Map<string, any>();
+    for (const r of ranked) {
+      const key = `${r.warehouse_code}|${r.sku_code}`;
+      const cell = cells.get(key) ?? {
+        warehouse: r.warehouse_code ?? '—',
+        sku: r.sku_code ?? '—',
+        impact_count: 0,
+        severity: 'LOW',
+      };
+      cell.impact_count += 1;
+      if (BAND_RANK[r.risk_band] > BAND_RANK[cell.severity]) cell.severity = r.risk_band;
+      cells.set(key, cell);
+    }
+
+    const affectedOrders = snapshots.map((s) => ({
+      snapshot_id: s._id,
+      order: orderMap.get(String(s.order_id)) || s.order_id,
+      risk_score: s.risk_score,
+      band: s.band,
+    }));
 
     res.status(200).json({
       disruption_id: id,
-      affected_orders: snapshots.map((s) => ({
-        snapshot_id: s._id,
-        order: s.order_id,
-        risk_score: s.risk_score,
-        band: s.band,
-      })),
+      disruption: {
+        _id: String(disruption._id),
+        disruption_type: disruption.disruption_type,
+        severity: disruption.severity,
+        status: disruption.status,
+        delay_hours: disruption.delay_hours,
+        detected_at: disruption.detected_at,
+        shipment_code: shipment?.code ?? null,
+      },
+      summary: {
+        total_orders: ranked.length,
+        critical_count: countBand('CRITICAL'),
+        high_count: countBand('HIGH'),
+        total_penalty: ranked.reduce((a, r) => a + r.penalty_exposure, 0),
+        avg_delay_hours: ranked.length
+          ? impactRound1(ranked.reduce((a, r) => a + r.hours_late, 0) / ranked.length)
+          : 0,
+      },
+      ranked_orders: ranked,
+      affected_orders: affectedOrders,
+      orders: ranked,
+      heatgrid: Array.from(cells.values()),
     });
   },
 );
