@@ -22,6 +22,10 @@ export const PUBLIC_ROUTES = [
   'POST /api/v1/webhooks/carrier/:source',
   'GET /fixtures/sample-transcripts',
   'GET /api/v1/fixtures/sample-transcripts',
+  'GET /evidence/video',
+  'GET /api/v1/evidence/video',
+  'GET /evidence/:id/video',
+  'GET /api/v1/evidence/:id/video',
 ];
 
 export interface DiscoveredRoute {

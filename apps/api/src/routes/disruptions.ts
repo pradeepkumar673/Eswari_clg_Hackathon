@@ -473,6 +473,8 @@ evidenceRouter.get(
 // GET /evidence/video — Stream the uploaded warehouse CCTV video directly
 evidenceRouter.get(
   '/video',
+  authenticateToken,
+  requireAnyPermission(['cctv.view', 'claim.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const candidatePaths = [
@@ -525,6 +527,8 @@ evidenceRouter.get(
 // GET /evidence/:id/video — Stream warehouse video for a specific claim/evidence
 evidenceRouter.get(
   '/:id/video',
+  authenticateToken,
+  requireAnyPermission(['cctv.view', 'claim.read.own']),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const candidatePaths = [
